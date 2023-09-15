@@ -1,0 +1,8 @@
+.stack-work/
+*~
+
+# nix easy directory navigation
+.direnv
+
+# Haskell tooling
+tags
