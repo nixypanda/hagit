@@ -6,3 +6,6 @@
 
 # Haskell tooling
 tags
+
+# this project specific
+git_test

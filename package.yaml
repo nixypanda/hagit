@@ -35,6 +35,10 @@ ghc-options:
 
 library:
   source-dirs: src
+  build-depends:
+    - base
+    - directory
+    - filepath
 
 executables:
   hagit-exe:
@@ -46,6 +50,7 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - hagit
+      - optparse-applicative
 
 tests:
   hagit-test:

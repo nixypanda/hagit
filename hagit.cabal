@@ -32,7 +32,9 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
+      base
+    , directory
+    , filepath
   default-language: Haskell2010
 
 executable hagit-exe
@@ -45,6 +47,7 @@ executable hagit-exe
   build-depends:
       base >=4.7 && <5
     , hagit
+    , optparse-applicative
   default-language: Haskell2010
 
 test-suite hagit-test
