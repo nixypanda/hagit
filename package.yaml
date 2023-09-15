@@ -35,10 +35,13 @@ ghc-options:
 
 library:
   source-dirs: src
-  build-depends:
+  dependencies:
     - base
     - directory
     - filepath
+    - zlib
+    - bytestring
+    - mtl
 
 executables:
   hagit-exe:
@@ -51,6 +54,7 @@ executables:
     dependencies:
       - hagit
       - optparse-applicative
+      - mtl
 
 tests:
   hagit-test:
