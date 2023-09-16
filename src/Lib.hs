@@ -1,16 +1,18 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Lib (
     GitError,
     GitM,
+    Command (..),
+    CatFileOpts (..),
+    HashObjOpts (..),
     runGitM,
-    initialize,
-    catFile,
-    hashObject,
+    runCommand,
 ) where
 
 import Codec.Compression.Zlib (decompress)
-import Control.Monad.Except (ExceptT, MonadError, liftEither)
+import Control.Monad.Except (ExceptT, MonadError, liftEither, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.Hash (Digest, SHA1)
 import Data.Bifunctor (first)
@@ -28,6 +30,11 @@ import System.IO (IOMode (WriteMode), hPutStrLn, withFile)
 import System.IO.Error (tryIOError)
 import Text.Parsec (ParseError)
 
+data Command
+    = Init
+    | CatFile CatFileOpts
+    | HashObject HashObjOpts
+
 data GitError
     = InvalidSHA1 ParseError
     | GitContentParseError ParseError
@@ -40,6 +47,13 @@ newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
 gitLocation :: FilePath
 gitLocation = "git_test"
 
+-- Main runner
+
+runCommand :: Command -> GitM ()
+runCommand Init = initialize
+runCommand (CatFile opts) = catFile opts
+runCommand (HashObject opts) = hashObject opts
+
 -- Commands
 initialize :: GitM ()
 initialize = do
@@ -50,16 +64,26 @@ initialize = do
         hPutStrLn f "ref: refs/heads/master"
     liftIO $ putStrLn "Initialized git directory"
 
-catFile :: BL.ByteString -> GitM ()
-catFile sha1Str = do
+data CatFileOpts = CatFileOpts
+    { preview :: Bool
+    , sha1Str :: BL.ByteString
+    }
+
+catFile :: CatFileOpts -> GitM ()
+catFile CatFileOpts{..} = do
     sha1 <- liftEither $ first InvalidSHA1 $ parseSHA1Str sha1Str
     gitObjectFileContent <- readContentFromSHA1Code sha1
     gitObject <- gitContentToObject' gitObjectFileContent
     liftIO $ BL.putStr (objBody gitObject)
 
-hashObject :: FilePath -> GitM ()
-hashObject filePath = do
-    obj <- hashObject' filePath
+data HashObjOpts = HashObjOpts
+    { write :: Bool
+    , filePath :: FilePath
+    }
+
+hashObject :: HashObjOpts -> GitM ()
+hashObject HashObjOpts{..} = do
+    obj <- hashObject' write filePath
     liftIO $ Prelude.putStr (objSha1Str obj)
 
 -- Helpers
@@ -81,11 +105,12 @@ writeObject obj = do
     liftIO $ createDirectoryIfMissing createParents objectDirPath
     liftIO $ BL.writeFile objectFilePath (objCompressedContent obj)
 
-hashObject' :: FilePath -> GitM GitObject
-hashObject' filePath = do
+hashObject' :: Bool -> FilePath -> GitM GitObject
+hashObject' doWrite filePath = do
     content <- liftIO $ BL.readFile filePath
     let blob = Blob content
-    writeObject blob
+    when doWrite $
+        writeObject blob
     pure blob
 
 gitContentToObject' :: BL.ByteString -> GitM GitObject

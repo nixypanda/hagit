@@ -21,26 +21,10 @@ import Options.Applicative (
 import Options.Applicative.Builder (info)
 import Options.Applicative.Types (Parser)
 
-import Data.ByteString.Lazy as BL (ByteString)
-import Lib (GitM, catFile, hashObject, initialize, runGitM)
-
-data Command
-    = Init
-    | CatFile CatFileOpts
-    | HashObject HashObjOpts
-
-data CatFileOpts = CatFileOpts
-    { preview :: Bool
-    , sha1 :: BL.ByteString
-    }
-
-data HashObjOpts = HashObjOpts
-    { write :: Bool
-    , filePath :: FilePath
-    }
+import Lib (CatFileOpts (..), Command (..), HashObjOpts (..), runCommand, runGitM)
 
 main :: IO ()
-main = runCommand =<< execParser opts
+main = runCmd =<< execParser opts
   where
     opts =
         info
@@ -70,14 +54,9 @@ hashObjectParser =
         <$> switch (long "write" <> short 'w')
         <*> strArgument (metavar "PATH")
 
-runCommand :: Command -> IO ()
-runCommand cmd = do
-    result <- runExceptT $ runGitM $ runCommand' cmd
+runCmd :: Command -> IO ()
+runCmd cmd = do
+    result <- runExceptT $ runGitM $ runCommand cmd
     case result of
         Left err -> print err
         Right () -> pure ()
-
-runCommand' :: Command -> GitM ()
-runCommand' Init = initialize
-runCommand' (CatFile CatFileOpts{..}) = catFile sha1
-runCommand' (HashObject HashObjOpts{..}) = hashObject filePath
