@@ -28,6 +28,7 @@ library
       Lib
       Object
       ObjectParse
+      Utils
   other-modules:
       Paths_hagit
   hs-source-dirs:
@@ -37,7 +38,7 @@ library
       base
     , binary
     , bytestring
-    , cryptohash
+    , cryptonite
     , directory
     , filepath
     , mtl
@@ -55,6 +56,7 @@ executable hagit-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , bytestring
     , hagit
     , mtl
     , optparse-applicative

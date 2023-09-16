@@ -37,15 +37,15 @@ library:
   source-dirs: src
   dependencies:
     - base
+    - binary
+    - bytestring
+    - cryptonite
     - directory
     - filepath
-    - zlib
-    - bytestring
     - mtl
-    - cryptohash
-    - binary
     - parsec
     - utf8-string
+    - zlib
 
 executables:
   hagit-exe:
@@ -57,8 +57,9 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - hagit
-      - optparse-applicative
       - mtl
+      - optparse-applicative
+      - bytestring
 
 tests:
   hagit-test:
