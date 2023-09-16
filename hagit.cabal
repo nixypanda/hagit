@@ -37,6 +37,7 @@ library
   build-depends:
       base
     , binary
+    , byteable
     , bytestring
     , cryptonite
     , directory

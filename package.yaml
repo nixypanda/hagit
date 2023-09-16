@@ -38,6 +38,7 @@ library:
   dependencies:
     - base
     - binary
+    - byteable
     - bytestring
     - cryptonite
     - directory

@@ -22,13 +22,21 @@ import Options.Applicative.Builder (info)
 import Options.Applicative.Types (Parser)
 
 import Data.ByteString.Lazy as BL (ByteString)
-import Lib (GitM, catFile, initialize, runGitM)
+import Lib (GitM, catFile, hashObject, initialize, runGitM)
 
-data Command = Init | CatFile CatFileOpts
+data Command
+    = Init
+    | CatFile CatFileOpts
+    | HashObject HashObjOpts
 
 data CatFileOpts = CatFileOpts
     { preview :: Bool
     , sha1 :: BL.ByteString
+    }
+
+data HashObjOpts = HashObjOpts
+    { write :: Bool
+    , filePath :: FilePath
     }
 
 main :: IO ()
@@ -47,6 +55,7 @@ commands =
     subparser
         ( command "init" (info (pure Init) (progDesc "Initialize a git repository"))
             <> command "cat-file" (info (CatFile <$> catFileParser) (progDesc "Print the contents of a file"))
+            <> command "hash-object" (info (HashObject <$> hashObjectParser) (progDesc "Hash an object"))
         )
 
 catFileParser :: Parser CatFileOpts
@@ -54,6 +63,12 @@ catFileParser =
     CatFileOpts
         <$> switch (long "preview" <> short 'p')
         <*> strArgument (metavar "SHA1")
+
+hashObjectParser :: Parser HashObjOpts
+hashObjectParser =
+    HashObjOpts
+        <$> switch (long "write" <> short 'w')
+        <*> strArgument (metavar "PATH")
 
 runCommand :: Command -> IO ()
 runCommand cmd = do
@@ -65,3 +80,4 @@ runCommand cmd = do
 runCommand' :: Command -> GitM ()
 runCommand' Init = initialize
 runCommand' (CatFile CatFileOpts{..}) = catFile sha1
+runCommand' (HashObject HashObjOpts{..}) = hashObject filePath

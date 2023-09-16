@@ -1,11 +1,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Lib (
-    initialize,
-    catFile,
     GitError,
     GitM,
     runGitM,
+    initialize,
+    catFile,
+    hashObject,
 ) where
 
 import Codec.Compression.Zlib (decompress)
@@ -17,8 +18,9 @@ import Data.ByteString.Lazy as BL (
     ByteString,
     putStr,
     readFile,
+    writeFile,
  )
-import Object (GitObject, body)
+import Object (GitObject (Blob), objBody, objCompressedContent, objSha1, objSha1Str)
 import ObjectParse (gitContentToObject, parseSHA1Str)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
@@ -36,7 +38,7 @@ newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
     deriving (Functor, Applicative, Monad, MonadIO, MonadError GitError)
 
 gitLocation :: FilePath
-gitLocation = ".git"
+gitLocation = "git_test"
 
 -- Commands
 initialize :: GitM ()
@@ -53,7 +55,12 @@ catFile sha1Str = do
     sha1 <- liftEither $ first InvalidSHA1 $ parseSHA1Str sha1Str
     gitObjectFileContent <- readContentFromSHA1Code sha1
     gitObject <- gitContentToObject' gitObjectFileContent
-    liftIO $ BL.putStr (body gitObject)
+    liftIO $ BL.putStr (objBody gitObject)
+
+hashObject :: FilePath -> GitM ()
+hashObject filePath = do
+    obj <- hashObject' filePath
+    liftIO $ Prelude.putStr (objSha1Str obj)
 
 -- Helpers
 
@@ -63,6 +70,23 @@ readContentFromSHA1Code sha1 = do
         filePath = gitLocation </> "objects" </> objectDir </> objectFilename
     content <- liftIO $ tryIOError $ BL.readFile filePath
     liftEither (decompress <$> first IOErr content)
+
+writeObject :: GitObject -> GitM ()
+writeObject obj = do
+    let (dir, filename) = sha1ToDirAndFilename (objSha1 obj)
+        objectDirPath = gitLocation </> "objects" </> dir
+        objectFilePath = objectDirPath </> filename
+        createParents = True
+
+    liftIO $ createDirectoryIfMissing createParents objectDirPath
+    liftIO $ BL.writeFile objectFilePath (objCompressedContent obj)
+
+hashObject' :: FilePath -> GitM GitObject
+hashObject' filePath = do
+    content <- liftIO $ BL.readFile filePath
+    let blob = Blob content
+    writeObject blob
+    pure blob
 
 gitContentToObject' :: BL.ByteString -> GitM GitObject
 gitContentToObject' = liftEither . first GitContentParseError . gitContentToObject
