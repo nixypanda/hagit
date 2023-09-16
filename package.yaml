@@ -42,6 +42,10 @@ library:
     - zlib
     - bytestring
     - mtl
+    - cryptohash
+    - binary
+    - parsec
+    - utf8-string
 
 executables:
   hagit-exe:

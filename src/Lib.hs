@@ -14,17 +14,18 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy as BL (
     ByteString,
-    dropWhile,
     putStr,
     readFile,
-    tail,
  )
+import Object (GitObject, body)
+import ObjectParse (gitContentToObject)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.IO (IOMode (WriteMode), hPutStrLn, withFile)
 import System.IO.Error (tryIOError)
+import Text.Parsec (ParseError)
 
-data GitError = IOErr IOError deriving (Show)
+data GitError = GitContentParseError ParseError | IOErr IOError deriving (Show)
 
 newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
     deriving (Functor, Applicative, Monad, MonadIO, MonadError GitError)
@@ -45,8 +46,8 @@ initialize = do
 catFile :: String -> GitM ()
 catFile sha1 = do
     gitObjectFileContent <- readContentFromSHA1Code sha1
-    let fileContent = stripPremble gitObjectFileContent
-    liftIO $ BL.putStr fileContent
+    gitObject <- gitContentToObject' gitObjectFileContent
+    liftIO $ BL.putStr (body gitObject)
 
 -- Helpers
 
@@ -57,9 +58,9 @@ readContentFromSHA1Code sha1 = do
     content <- liftIO $ tryIOError $ BL.readFile filePath
     liftEither (decompress <$> first IOErr content)
 
+gitContentToObject' :: BL.ByteString -> GitM GitObject
+gitContentToObject' = liftEither . first GitContentParseError . gitContentToObject
+
 -- SHA-1 to directory and filename
 sha1ToDirAndFilename :: String -> (String, String)
 sha1ToDirAndFilename = splitAt 2
-
-stripPremble :: BL.ByteString -> BL.ByteString
-stripPremble content = BL.tail $ BL.dropWhile (/= 0) content
