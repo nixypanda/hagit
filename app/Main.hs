@@ -21,13 +21,14 @@ import Options.Applicative (
 import Options.Applicative.Builder (info)
 import Options.Applicative.Types (Parser)
 
+import Data.ByteString.Lazy as BL (ByteString)
 import Lib (GitM, catFile, initialize, runGitM)
 
 data Command = Init | CatFile CatFileOpts
 
 data CatFileOpts = CatFileOpts
     { preview :: Bool
-    , sha1 :: String
+    , sha1 :: BL.ByteString
     }
 
 main :: IO ()
