@@ -43,6 +43,7 @@ library:
     - cryptonite
     - directory
     - filepath
+    - memory
     - mtl
     - parsec
     - utf8-string

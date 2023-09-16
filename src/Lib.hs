@@ -13,6 +13,7 @@ module Lib (
 ) where
 
 import Codec.Compression.Zlib (decompress)
+import Control.Monad (forM)
 import Control.Monad.Except (ExceptT, MonadError, liftEither, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.Hash (Digest, SHA1)
@@ -23,11 +24,16 @@ import Data.ByteString.Lazy as BL (
     readFile,
     writeFile,
  )
+import Data.ByteString.Lazy.UTF8 as BLU (fromString)
+import Data.List (sort)
 import Object (
     GitObject (..),
     ObjectType (..),
-    entryBody,
+    TreeEntry (..),
+    dirMode,
+    entryBodyStr,
     entryNameStr,
+    fileMode,
     objBody,
     objCompressedContent,
     objSha1,
@@ -35,8 +41,8 @@ import Object (
     objType,
  )
 import ObjectParse (gitContentToObject, parseSHA1Str)
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>))
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import System.FilePath (takeBaseName, (</>))
 import System.IO (IOMode (WriteMode), hPutStrLn, withFile)
 import System.IO.Error (tryIOError)
 import Text.Parsec (ParseError)
@@ -46,6 +52,7 @@ data Command
     | CatFile CatFileOpts
     | HashObject HashObjOpts
     | LsTree LsTreeOpts
+    | WriteTree
 
 data GitError
     = InvalidSHA1 ParseError
@@ -58,7 +65,7 @@ newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
     deriving (Functor, Applicative, Monad, MonadIO, MonadError GitError)
 
 gitLocation :: FilePath
-gitLocation = ".git"
+gitLocation = "git_test"
 
 -- Main runner
 
@@ -67,6 +74,7 @@ runCommand Init = initialize
 runCommand (CatFile opts) = catFile opts
 runCommand (HashObject opts) = hashObject opts
 runCommand (LsTree opts) = lsTree opts
+runCommand WriteTree = writeTree
 
 -- Commands
 initialize :: GitM ()
@@ -116,8 +124,44 @@ lsTree LsTreeOpts{..} = do
     let showFunc =
             if nameOnly
                 then entryNameStr
-                else entryBody
+                else entryBodyStr
     liftIO $ Prelude.putStrLn $ Prelude.unlines $ fmap showFunc treeEntries
+
+writeTree :: GitM ()
+writeTree = do
+    treeEntry <- writeTree' "."
+    liftIO $ print (entrySha1 treeEntry)
+
+writeTreeExclusionList :: [FilePath]
+writeTreeExclusionList = [".git", "git_test", ".direnv", "tags", ".stack-work"]
+
+writeTree' :: FilePath -> GitM TreeEntry
+writeTree' basePath = do
+    eitherFilepaths <- liftIO $ tryIOError $ listDirectory basePath
+    filepaths <- liftEither $ first IOErr eitherFilepaths
+    let filteredFilePaths = filter (`notElem` writeTreeExclusionList) filepaths
+    let sortedFilePaths = sort filteredFilePaths
+
+    treeEntries <- forM sortedFilePaths $ \filepath -> do
+        let path = basePath </> filepath
+        isDir <- liftIO $ doesDirectoryExist path
+        if isDir
+            then writeTree' path
+            else do
+                let doCreate = True
+                gitObject <- hashObject' doCreate path
+                let entryMode = fileMode
+                    entryName = BLU.fromString filepath
+                    entrySha1 = objSha1 gitObject
+                pure $ TreeEntry{..}
+
+    let tree = Tree treeEntries
+    writeObject tree
+
+    let entryMode = dirMode
+        entryName = BLU.fromString $ takeBaseName basePath
+        entrySha1 = objSha1 tree
+    pure $ TreeEntry{..}
 
 -- Helpers
 

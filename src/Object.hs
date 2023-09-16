@@ -13,8 +13,10 @@ module Object (
     objSha1,
     objSha1Str,
     objType,
-    entryBody,
+    entryBodyStr,
     entryNameStr,
+    fileMode,
+    dirMode,
 ) where
 
 import Codec.Compression.Zlib (compress)
@@ -24,6 +26,7 @@ import Data.ByteString.Lazy.Char8 as BLC (pack)
 import Data.ByteString.Lazy.UTF8 as BLU (toString)
 import GHC.Generics (Generic)
 import Text.Printf (printf)
+import Utils (sha1ToByteString)
 
 data ObjectType
     = BlobType
@@ -41,7 +44,7 @@ data GitObject
 
 objBody :: GitObject -> BL.ByteString
 objBody (Blob b) = b
-objBody (Tree _) = undefined
+objBody (Tree entries) = mconcat $ fmap entryBody entries
 
 objType :: GitObject -> ObjectType
 objType (Blob _) = BlobType
@@ -69,8 +72,20 @@ data TreeEntry = TreeEntry
     }
     deriving (Show, Eq)
 
-entryBody :: TreeEntry -> String
+fileMode, dirMode :: BL.ByteString
+fileMode = "100644"
+dirMode = "40000"
+
+entryBody :: TreeEntry -> BL.ByteString
 entryBody TreeEntry{..} =
+    entryMode
+        <> " "
+        <> entryName
+        <> "\0"
+        <> sha1ToByteString entrySha1
+
+entryBodyStr :: TreeEntry -> String
+entryBodyStr TreeEntry{..} =
     printf "%6s " (BLU.toString entryMode)
         <> " "
         <> show entrySha1
