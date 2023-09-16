@@ -7,6 +7,7 @@ module Lib (
     Command (..),
     CatFileOpts (..),
     HashObjOpts (..),
+    LsTreeOpts (..),
     runGitM,
     runCommand,
 ) where
@@ -22,7 +23,17 @@ import Data.ByteString.Lazy as BL (
     readFile,
     writeFile,
  )
-import Object (GitObject (Blob), objBody, objCompressedContent, objSha1, objSha1Str)
+import Object (
+    GitObject (..),
+    ObjectType (..),
+    entryBody,
+    entryNameStr,
+    objBody,
+    objCompressedContent,
+    objSha1,
+    objSha1Str,
+    objType,
+ )
 import ObjectParse (gitContentToObject, parseSHA1Str)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
@@ -34,10 +45,12 @@ data Command
     = Init
     | CatFile CatFileOpts
     | HashObject HashObjOpts
+    | LsTree LsTreeOpts
 
 data GitError
     = InvalidSHA1 ParseError
     | GitContentParseError ParseError
+    | UnexpectedObjectError ObjectType ObjectType
     | IOErr IOError
     deriving (Show)
 
@@ -45,7 +58,7 @@ newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
     deriving (Functor, Applicative, Monad, MonadIO, MonadError GitError)
 
 gitLocation :: FilePath
-gitLocation = "git_test"
+gitLocation = ".git"
 
 -- Main runner
 
@@ -53,6 +66,7 @@ runCommand :: Command -> GitM ()
 runCommand Init = initialize
 runCommand (CatFile opts) = catFile opts
 runCommand (HashObject opts) = hashObject opts
+runCommand (LsTree opts) = lsTree opts
 
 -- Commands
 initialize :: GitM ()
@@ -85,6 +99,25 @@ hashObject :: HashObjOpts -> GitM ()
 hashObject HashObjOpts{..} = do
     obj <- hashObject' write filePath
     liftIO $ Prelude.putStr (objSha1Str obj)
+
+data LsTreeOpts = LsTreeOpts
+    { nameOnly :: Bool
+    , treeSha :: BL.ByteString
+    }
+
+lsTree :: LsTreeOpts -> GitM ()
+lsTree LsTreeOpts{..} = do
+    sha1 <- liftEither $ first InvalidSHA1 $ parseSHA1Str treeSha
+    gitObjectFileContent <- readContentFromSHA1Code sha1
+    gitObject <- gitContentToObject' gitObjectFileContent
+    treeEntries <- liftEither $ case gitObject of
+        Tree entries -> pure entries
+        gitObj -> Left $ UnexpectedObjectError TreeType (objType gitObj)
+    let showFunc =
+            if nameOnly
+                then entryNameStr
+                else entryBody
+    liftIO $ Prelude.putStrLn $ Prelude.unlines $ fmap showFunc treeEntries
 
 -- Helpers
 

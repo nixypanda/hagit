@@ -1,26 +1,51 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
-module Object (GitObject (..), objBody, objCompressedContent, objContent, objHeader, objSha1, objSha1Str) where
+module Object (
+    GitObject (..),
+    TreeEntry (..),
+    ObjectType (..),
+    objBody,
+    objCompressedContent,
+    objContent,
+    objHeader,
+    objSha1,
+    objSha1Str,
+    objType,
+    entryBody,
+    entryNameStr,
+) where
 
 import Codec.Compression.Zlib (compress)
 import Crypto.Hash (Digest, SHA1, hashlazy)
 import Data.ByteString.Lazy as BL (ByteString, length)
 import Data.ByteString.Lazy.Char8 as BLC (pack)
+import Data.ByteString.Lazy.UTF8 as BLU (toString)
 import GHC.Generics (Generic)
+import Text.Printf (printf)
 
-data ObjectType = BlobType deriving (Generic)
+data ObjectType
+    = BlobType
+    | TreeType
+    deriving (Generic)
 
 instance Show ObjectType where
     show BlobType = "blob"
+    show TreeType = "tree"
 
-newtype GitObject = Blob BL.ByteString deriving (Show)
+data GitObject
+    = Blob BL.ByteString
+    | Tree [TreeEntry]
+    deriving (Show)
 
 objBody :: GitObject -> BL.ByteString
 objBody (Blob b) = b
+objBody (Tree _) = undefined
 
 objType :: GitObject -> ObjectType
 objType (Blob _) = BlobType
+objType (Tree _) = TreeType
 
 objContent :: GitObject -> BL.ByteString
 objContent obj = objHeader obj <> "\0" <> objBody obj
@@ -36,3 +61,21 @@ objSha1 = hashlazy . objContent
 
 objSha1Str :: GitObject -> String
 objSha1Str = show . objSha1
+
+data TreeEntry = TreeEntry
+    { entryMode :: BL.ByteString
+    , entryName :: BL.ByteString
+    , entrySha1 :: Digest SHA1
+    }
+    deriving (Show, Eq)
+
+entryBody :: TreeEntry -> String
+entryBody TreeEntry{..} =
+    printf "%6s " (BLU.toString entryMode)
+        <> " "
+        <> show entrySha1
+        <> " "
+        <> BLU.toString entryName
+
+entryNameStr :: TreeEntry -> String
+entryNameStr = BLU.toString . entryName

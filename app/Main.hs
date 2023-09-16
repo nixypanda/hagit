@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Main (main) where
 
 import Control.Monad.Except (runExceptT)
@@ -21,7 +19,14 @@ import Options.Applicative (
 import Options.Applicative.Builder (info)
 import Options.Applicative.Types (Parser)
 
-import Lib (CatFileOpts (..), Command (..), HashObjOpts (..), runCommand, runGitM)
+import Lib (
+    CatFileOpts (..),
+    Command (..),
+    HashObjOpts (..),
+    LsTreeOpts (..),
+    runCommand,
+    runGitM,
+ )
 
 main :: IO ()
 main = runCmd =<< execParser opts
@@ -40,6 +45,7 @@ commands =
         ( command "init" (info (pure Init) (progDesc "Initialize a git repository"))
             <> command "cat-file" (info (CatFile <$> catFileParser) (progDesc "Print the contents of a file"))
             <> command "hash-object" (info (HashObject <$> hashObjectParser) (progDesc "Hash an object"))
+            <> command "ls-tree" (info (LsTree <$> lsTreeParser) (progDesc "List the contents of a tree"))
         )
 
 catFileParser :: Parser CatFileOpts
@@ -52,6 +58,12 @@ hashObjectParser :: Parser HashObjOpts
 hashObjectParser =
     HashObjOpts
         <$> switch (long "write" <> short 'w')
+        <*> strArgument (metavar "PATH")
+
+lsTreeParser :: Parser LsTreeOpts
+lsTreeParser =
+    LsTreeOpts
+        <$> switch (long "name-only" <> short 'n')
         <*> strArgument (metavar "PATH")
 
 runCmd :: Command -> IO ()
