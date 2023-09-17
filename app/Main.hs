@@ -49,31 +49,19 @@ commands =
         ( command "init" (info (pure Init) (progDesc "Initialize a git repository"))
             <> command
                 "cat-file"
-                ( info
-                    (CatFile <$> catFileParser)
-                    (progDesc "Print the contents of a file")
-                )
+                (info (CatFile <$> catFileParser) (progDesc "Print contents of a file"))
             <> command
                 "hash-object"
                 (info (HashObject <$> hashObjectParser) (progDesc "Hash an object"))
             <> command
                 "ls-tree"
-                ( info
-                    (LsTree <$> lsTreeParser)
-                    (progDesc "List the contents of a tree")
-                )
+                (info (LsTree <$> lsTreeParser) (progDesc "List contents of a tree"))
             <> command
                 "write-tree"
-                ( info
-                    (pure WriteTree)
-                    (progDesc "Write the contents of cwd to a tree")
-                )
+                (info (pure WriteTree) (progDesc "Write contents of cwd to a tree"))
             <> command
                 "commit-tree"
-                ( info
-                    (CommitTree <$> commitTreeParser)
-                    (progDesc "Commit a tree")
-                )
+                (info (CommitTree <$> commitTreeParser) (progDesc "Commit a tree"))
         )
 
 catFileParser :: Parser CatFileOpts
@@ -107,11 +95,7 @@ commitTreeParser =
                 )
             )
         <*> strOption
-            ( short 'm'
-                <> long "message"
-                <> metavar "MESSAGE"
-                <> help "Commit message"
-            )
+            (short 'm' <> long "message" <> metavar "MESSAGE" <> help "Commit message")
         <*> optional
             ( strOption
                 ( short 'a'
