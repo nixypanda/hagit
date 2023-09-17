@@ -46,7 +46,7 @@ data GitObject
     = Blob BL.ByteString
     | Tree [TreeEntry]
     | Commit CommitInner
-    deriving (Show)
+    deriving (Show, Eq)
 
 data CommitInner = CommitInner
     { treeSha :: Digest SHA1
@@ -55,7 +55,7 @@ data CommitInner = CommitInner
     , authorInfo :: BL.ByteString
     , commitTime :: UTCTime
     }
-    deriving (Show)
+    deriving (Show, Eq)
 
 objBody :: GitObject -> BL.ByteString
 objBody (Blob b) = b

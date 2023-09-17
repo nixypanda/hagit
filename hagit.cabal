@@ -69,6 +69,8 @@ test-suite hagit-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ObjectParseTests
+      ObjectTests
       Paths_hagit
   hs-source-dirs:
       test
@@ -80,4 +82,5 @@ test-suite hagit-test
     , cryptonite
     , hagit
     , parsec
+    , zlib
   default-language: Haskell2010
