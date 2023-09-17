@@ -17,13 +17,16 @@ module Object (
     entryNameStr,
     fileMode,
     dirMode,
+    createCommitObject,
 ) where
 
 import Codec.Compression.Zlib (compress)
 import Crypto.Hash (Digest, SHA1, hashlazy)
 import Data.ByteString.Lazy as BL (ByteString, length)
 import Data.ByteString.Lazy.Char8 as BLC (pack)
-import Data.ByteString.Lazy.UTF8 as BLU (toString)
+import Data.ByteString.Lazy.UTF8 as BLU (fromString, toString)
+import Data.Time (UTCTime, formatTime)
+import Data.Time.Format (defaultTimeLocale)
 import GHC.Generics (Generic)
 import Text.Printf (printf)
 import Utils (sha1ToByteString)
@@ -31,24 +34,38 @@ import Utils (sha1ToByteString)
 data ObjectType
     = BlobType
     | TreeType
+    | CommitType
     deriving (Generic)
 
 instance Show ObjectType where
     show BlobType = "blob"
     show TreeType = "tree"
+    show CommitType = "commit"
 
 data GitObject
     = Blob BL.ByteString
     | Tree [TreeEntry]
+    | Commit CommitInner
+    deriving (Show)
+
+data CommitInner = CommitInner
+    { treeSha :: Digest SHA1
+    , parentSha :: Maybe (Digest SHA1)
+    , commitMessage :: BL.ByteString
+    , authorInfo :: BL.ByteString
+    , commitTime :: UTCTime
+    }
     deriving (Show)
 
 objBody :: GitObject -> BL.ByteString
 objBody (Blob b) = b
 objBody (Tree entries) = mconcat $ fmap entryBody entries
+objBody (Commit commitInner) = commitBody commitInner
 
 objType :: GitObject -> ObjectType
 objType (Blob _) = BlobType
 objType (Tree _) = TreeType
+objType (Commit _) = CommitType
 
 objContent :: GitObject -> BL.ByteString
 objContent obj = objHeader obj <> "\0" <> objBody obj
@@ -94,3 +111,30 @@ entryBodyStr TreeEntry{..} =
 
 entryNameStr :: TreeEntry -> String
 entryNameStr = BLU.toString . entryName
+
+createCommitObject ::
+    Digest SHA1 ->
+    Maybe (Digest SHA1) ->
+    BL.ByteString ->
+    BL.ByteString ->
+    UTCTime ->
+    GitObject
+createCommitObject treeSha parentSha authorInfo commitMessage commitTime = do
+    Commit $ CommitInner{..}
+
+commitBody :: CommitInner -> BL.ByteString
+commitBody commit =
+    let author' = authorInfo commit
+        parent = case parentSha commit of
+            Just sha -> "parent " <> sha1ToByteString sha <> "\n"
+            Nothing -> ""
+     in "tree "
+            <> sha1ToByteString (treeSha commit)
+            <> "\n"
+            <> parent
+            <> "author "
+            <> author'
+            <> " "
+            <> BLU.fromString (formatTime defaultTimeLocale "%s" (commitTime commit))
+            <> " +0000\n\n"
+            <> commitMessage commit

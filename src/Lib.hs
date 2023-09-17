@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Lib (
@@ -8,6 +9,7 @@ module Lib (
     CatFileOpts (..),
     HashObjOpts (..),
     LsTreeOpts (..),
+    CommitTreeOpts (..),
     runGitM,
     runCommand,
 ) where
@@ -26,10 +28,13 @@ import Data.ByteString.Lazy as BL (
  )
 import Data.ByteString.Lazy.UTF8 as BLU (fromString)
 import Data.List (sort)
+import Data.Maybe (fromMaybe)
+import Data.Time (getCurrentTime)
 import Object (
     GitObject (..),
     ObjectType (..),
     TreeEntry (..),
+    createCommitObject,
     dirMode,
     entryBodyStr,
     entryNameStr,
@@ -53,6 +58,7 @@ data Command
     | HashObject HashObjOpts
     | LsTree LsTreeOpts
     | WriteTree
+    | CommitTree CommitTreeOpts
 
 data GitError
     = InvalidSHA1 ParseError
@@ -75,6 +81,7 @@ runCommand (CatFile opts) = catFile opts
 runCommand (HashObject opts) = hashObject opts
 runCommand (LsTree opts) = lsTree opts
 runCommand WriteTree = writeTree
+runCommand (CommitTree opts) = commitTree opts
 
 -- Commands
 initialize :: GitM ()
@@ -162,6 +169,31 @@ writeTree' basePath = do
         entryName = BLU.fromString $ takeBaseName basePath
         entrySha1 = objSha1 tree
     pure $ TreeEntry{..}
+
+data CommitTreeOpts = CommitTreeOpts
+    { treeShaOpt :: BL.ByteString
+    , parentShaOpt :: Maybe BL.ByteString
+    , commitMessageOpt :: BL.ByteString
+    , commitAuthorOpt :: Maybe BL.ByteString
+    }
+
+defaultAuthor :: BL.ByteString
+defaultAuthor = "Sparki Coco <sparki.coco@email.random>"
+
+commitTree :: CommitTreeOpts -> GitM ()
+commitTree CommitTreeOpts{..} = do
+    sha1 <- liftEither $ first InvalidSHA1 $ parseSHA1Str treeShaOpt
+    parentSha1 <- case parentShaOpt of
+        Nothing -> pure Nothing
+        Just pSha1 -> do
+            pSha1' <- liftEither $ first InvalidSHA1 $ parseSHA1Str pSha1
+            pure $ Just pSha1'
+    let commitMessage = commitMessageOpt
+    let commitAuthor = fromMaybe defaultAuthor commitAuthorOpt
+    commitTime <- liftIO getCurrentTime
+    let commit = createCommitObject sha1 parentSha1 commitAuthor commitMessage commitTime
+    writeObject commit
+    liftIO $ print $ objSha1Str commit
 
 -- Helpers
 

@@ -46,6 +46,7 @@ library:
     - memory
     - mtl
     - parsec
+    - time
     - utf8-string
     - zlib
 

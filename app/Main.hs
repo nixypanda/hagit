@@ -6,12 +6,15 @@ import Options.Applicative (
     execParser,
     fullDesc,
     header,
+    help,
     helper,
     long,
     metavar,
+    optional,
     progDesc,
     short,
     strArgument,
+    strOption,
     subparser,
     switch,
     (<**>),
@@ -22,6 +25,7 @@ import Options.Applicative.Types (Parser)
 import Lib (
     CatFileOpts (..),
     Command (..),
+    CommitTreeOpts (..),
     HashObjOpts (..),
     LsTreeOpts (..),
     runCommand,
@@ -47,6 +51,7 @@ commands =
             <> command "hash-object" (info (HashObject <$> hashObjectParser) (progDesc "Hash an object"))
             <> command "ls-tree" (info (LsTree <$> lsTreeParser) (progDesc "List the contents of a tree"))
             <> command "write-tree" (info (pure WriteTree) (progDesc "Write the contents of cwd to a tree"))
+            <> command "commit-tree" (info (CommitTree <$> commitTreeParser) (progDesc "Commit a tree"))
         )
 
 catFileParser :: Parser CatFileOpts
@@ -66,6 +71,34 @@ lsTreeParser =
     LsTreeOpts
         <$> switch (long "name-only" <> short 'n')
         <*> strArgument (metavar "PATH")
+
+commitTreeParser :: Parser CommitTreeOpts
+commitTreeParser =
+    CommitTreeOpts
+        <$> strArgument (metavar "TREE_SHA1" <> help "SHA1 of the tree to commit")
+        <*> optional
+            ( strOption
+                ( short 'p'
+                    <> long "parent"
+                    <> metavar "PARENT_SHA1"
+                    <> help "SHA1 of parent commit (if any)"
+                )
+            )
+        <*> strOption
+            ( short 'm'
+                <> long "message"
+                <> metavar "MESSAGE"
+                <> help "Commit message"
+            )
+        <*> optional
+            ( strOption
+                ( short 'a'
+                    <> long "author"
+                    <> metavar
+                        "NAME_AND_EMAIL"
+                    <> help "author name followed by email `Author Name <author@email.eg>`"
+                )
+            )
 
 runCmd :: Command -> IO ()
 runCmd cmd = do
