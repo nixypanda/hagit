@@ -10,6 +10,7 @@ module Lib (
     HashObjOpts (..),
     LsTreeOpts (..),
     CommitTreeOpts (..),
+    CloneRepoOpts (..),
     runGitM,
     runCommand,
 ) where
@@ -59,6 +60,7 @@ data Command
     | LsTree LsTreeOpts
     | WriteTree
     | CommitTree CommitTreeOpts
+    | CloneRepo CloneRepoOpts
 
 data GitError
     = InvalidSHA1 ParseError
@@ -82,6 +84,7 @@ runCommand (HashObject opts) = hashObject opts
 runCommand (LsTree opts) = lsTree opts
 runCommand WriteTree = writeTree
 runCommand (CommitTree opts) = commitTree opts
+runCommand (CloneRepo opts) = cloneRepo opts
 
 -- Commands
 initialize :: GitM ()
@@ -194,6 +197,14 @@ commitTree CommitTreeOpts{..} = do
     let commit = createCommitObject treeSha1 parentSha1 author msg now
     writeObject commit
     liftIO $ print $ objSha1Str commit
+
+data CloneRepoOpts = CloneRepoOpts
+    { repoUrlHTTPS :: String
+    , repoLocalPath :: FilePath
+    }
+
+cloneRepo :: CloneRepoOpts -> GitM ()
+cloneRepo _ = undefined
 
 -- Helpers
 
