@@ -182,16 +182,16 @@ defaultAuthor = "Sparki Coco <sparki.coco@email.random>"
 
 commitTree :: CommitTreeOpts -> GitM ()
 commitTree CommitTreeOpts{..} = do
-    sha1 <- liftEither $ first InvalidSHA1 $ parseSHA1Str treeShaOpt
+    treeSha1 <- liftEither $ first InvalidSHA1 $ parseSHA1Str treeShaOpt
     parentSha1 <- case parentShaOpt of
         Nothing -> pure Nothing
         Just pSha1 -> do
             pSha1' <- liftEither $ first InvalidSHA1 $ parseSHA1Str pSha1
             pure $ Just pSha1'
-    let commitMessage = commitMessageOpt
-    let commitAuthor = fromMaybe defaultAuthor commitAuthorOpt
-    commitTime <- liftIO getCurrentTime
-    let commit = createCommitObject sha1 parentSha1 commitAuthor commitMessage commitTime
+    let msg = commitMessageOpt
+    let author = fromMaybe defaultAuthor commitAuthorOpt
+    now <- liftIO getCurrentTime
+    let commit = createCommitObject treeSha1 parentSha1 author msg now
     writeObject commit
     liftIO $ print $ objSha1Str commit
 
