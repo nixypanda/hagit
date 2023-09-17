@@ -26,9 +26,12 @@ source-repository head
 library
   exposed-modules:
       HTTPSmart
+      HTTPSmartParse
       Lib
       Object
       ObjectParse
+      PktLine
+      PktLineParse
       Utils
   other-modules:
       Paths_hagit
@@ -75,6 +78,7 @@ test-suite hagit-test
   other-modules:
       ObjectParseTests
       ObjectTests
+      PktLineParseTests
       Paths_hagit
   hs-source-dirs:
       test

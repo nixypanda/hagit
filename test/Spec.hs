@@ -1,6 +1,6 @@
-import HTTPSmartParseTests (httpSmartParserTests)
 import ObjectParseTests (parserTests)
 import ObjectTests (objectTests)
+import PktLineParseTests (pktLineParserTests)
 import Test.HUnit
 
 tests :: Test
@@ -8,7 +8,7 @@ tests =
     TestList $
         parserTests
             <> objectTests
-            <> httpSmartParserTests
+            <> pktLineParserTests
 
 main :: IO ()
 main = do
