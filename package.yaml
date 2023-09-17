@@ -43,6 +43,9 @@ library:
     - cryptonite
     - directory
     - filepath
+    - http-client
+    - http-client-tls
+    - http-types
     - memory
     - mtl
     - parsec

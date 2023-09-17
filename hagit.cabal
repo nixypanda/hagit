@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      HTTPSmart
       Lib
       Object
       ObjectParse
@@ -42,6 +43,9 @@ library
     , cryptonite
     , directory
     , filepath
+    , http-client
+    , http-client-tls
+    , http-types
     , memory
     , mtl
     , parsec

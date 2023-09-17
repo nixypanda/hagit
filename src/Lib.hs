@@ -31,6 +31,7 @@ import Data.ByteString.Lazy.UTF8 as BLU (fromString)
 import Data.List (sort)
 import Data.Maybe (fromMaybe)
 import Data.Time (getCurrentTime)
+import HTTPSmart (discoverGitServerCapabilities)
 import Object (
     GitObject (..),
     ObjectType (..),
@@ -204,7 +205,9 @@ data CloneRepoOpts = CloneRepoOpts
     }
 
 cloneRepo :: CloneRepoOpts -> GitM ()
-cloneRepo _ = undefined
+cloneRepo CloneRepoOpts{..} = do
+    capabilities <- liftIO $ discoverGitServerCapabilities repoUrlHTTPS
+    liftIO $ print capabilities
 
 -- Helpers
 
