@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..)) where
+module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..), lsRefs) where
 
 import Data.ByteString.Lazy as BL (ByteString)
+import HTTPSmartCommand (Command (..), encodeCommand)
 import HTTPSmartParse (gitServerCapabilitiesParser)
-import Network.HTTP.Client (Request (..), httpLbs, newManager, parseRequest, responseBody)
+import Network.HTTP.Client (Request (..), RequestBody (RequestBodyLBS), httpLbs, newManager, parseRequest, responseBody)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (renderSimpleQuery)
 import Text.Parsec (ParseError, parse)
@@ -33,3 +34,22 @@ discoverGitServerCapabilities url = do
     case parse gitServerCapabilitiesParser "" received of
         Left err -> pure $ Left $ ParsingError err
         Right caps -> pure $ Right caps
+
+lsRefs :: String -> IO BL.ByteString
+lsRefs url = do
+    httpManager <- newManager tlsManagerSettings
+    initReq <- parseRequest $ url <> "/git-upload-pack"
+    let cmd = LsRefs [] ["peel", "unborn", "ref-prefix HEAD", "ref-prefix refs/heads/", "ref-prefix refs/tags/"]
+        headers =
+            [ ("git-protocol", "version=2")
+            , ("content-type", "application/x-git-upload-pack-request")
+            , ("accept", "application/x-git-upload-pack-result")
+            ]
+        request =
+            initReq
+                { method = "POST"
+                , requestHeaders = headers
+                , requestBody = RequestBodyLBS $ encodeCommand cmd
+                }
+    res <- httpLbs request httpManager
+    pure $ responseBody res

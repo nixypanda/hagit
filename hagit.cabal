@@ -78,6 +78,7 @@ test-suite hagit-test
   main-is: Spec.hs
   other-modules:
       HTTPSmartCommandTests
+      HTTPSmartParseTests
       ObjectParseTests
       ObjectTests
       PktLineParseTests
