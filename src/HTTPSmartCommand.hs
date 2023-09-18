@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmartCommand (encodeCommand) where
+module HTTPSmartCommand (encodeCommand, Command (..), Ref (..)) where
 
+import Crypto.Hash (Digest, SHA1)
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (ord)
 import Data.Word (Word8)
@@ -31,3 +32,9 @@ encodeCmd' cmd capabilities cmdArgs =
 
 lf :: Word8
 lf = fromIntegral . ord $ '\n'
+
+data Ref = Ref
+    { refName :: BL.ByteString
+    , refSha1 :: Digest SHA1
+    }
+    deriving (Show, Eq)
