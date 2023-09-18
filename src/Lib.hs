@@ -31,7 +31,7 @@ import Data.ByteString.Lazy.UTF8 as BLU (fromString)
 import Data.List (sort)
 import Data.Maybe (fromMaybe)
 import Data.Time (getCurrentTime)
-import HTTPSmart (HttpSmartError, discoverGitServerCapabilities, lsRefs)
+import HTTPSmart (HttpSmartError, discoverGitServerCapabilities, fetch, lsRefs)
 import Object (
     GitObject (..),
     ObjectType (..),
@@ -214,8 +214,10 @@ cloneRepo CloneRepoOpts{..} = do
     unless (all (`elem` capabilities) expectedCapabilities) $
         throwError $
             ServerCapabilitiesMismatch expectedCapabilities capabilities
-    refs <- liftIO $ lsRefs repoUrlHTTPS
-    liftIO $ print refs
+    eitherRefs <- liftIO $ lsRefs repoUrlHTTPS
+    refs <- liftEither $ first HttpSmartErr eitherRefs
+    packfile <- liftIO $ fetch repoUrlHTTPS refs
+    liftIO $ print packfile
 
 -- Helpers
 

@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..), lsRefs) where
+module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..), lsRefs, fetch) where
 
 import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString.Lazy as BL (ByteString)
-import HTTPSmartCommand (Command (..), Ref, encodeCommand)
+import HTTPSmartCommand (Command (..), Ref, encodeCommand, refsToFetch)
 import HTTPSmartParse (gitServerCapabilitiesParser, lsResultParser)
 import Network.HTTP.Client (Request (..), RequestBody (RequestBodyLBS), httpLbs, newManager, parseRequest, responseBody)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -40,7 +40,7 @@ lsRefs :: String -> IO (Either HttpSmartError [Ref])
 lsRefs url = do
     httpManager <- newManager tlsManagerSettings
     initReq <- parseRequest $ url <> "/git-upload-pack"
-    let cmd = LsRefs [] ["peel", "unborn", "ref-prefix HEAD", "ref-prefix refs/heads/", "ref-prefix refs/tags/"]
+    let cmd = LsRefs ["object-format=sha1"] ["peel", "unborn", "ref-prefix HEAD", "ref-prefix refs/heads/", "ref-prefix refs/tags/"]
         headers =
             [ ("git-protocol", "version=2")
             , ("content-type", "application/x-git-upload-pack-request")
@@ -55,3 +55,23 @@ lsRefs url = do
     res <- httpLbs request httpManager
     let received = responseBody res
     pure $ first ParsingError $ lsResultParser received
+
+fetch :: String -> [Ref] -> IO BL.ByteString
+fetch url refs = do
+    httpManager <- newManager tlsManagerSettings
+    initReq <- parseRequest $ url <> "/git-upload-pack"
+    let cmd = refsToFetch ["object-format=sha1"] refs
+        headers =
+            [ ("git-protocol", "version=2")
+            , ("content-type", "application/x-git-upload-pack-request")
+            , ("accept", "application/x-git-upload-pack-result")
+            ]
+        request =
+            initReq
+                { method = "POST"
+                , requestHeaders = headers
+                , requestBody = RequestBodyLBS $ encodeCommand cmd
+                }
+    res <- httpLbs request httpManager
+    let received = responseBody res
+    pure received

@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmartCommand (encodeCommand, Command (..), Ref (..)) where
+module HTTPSmartCommand (encodeCommand, Command (..), Ref (..), refsToFetch) where
 
 import Crypto.Hash (Digest, SHA1)
-import qualified Data.ByteString.Lazy as BL
+import Data.ByteString.Lazy as BL (ByteString, concat, snoc)
+import Data.ByteString.Lazy.Char8 as BLC (pack)
 import Data.Char (ord)
 import Data.Word (Word8)
 import PktLine (dataPktLine, delimiterPkt, encodePktLine, flushPkt)
@@ -11,10 +12,22 @@ import PktLine (dataPktLine, delimiterPkt, encodePktLine, flushPkt)
 type Capability = BL.ByteString
 type CommandArugment = BL.ByteString
 
-data Command = LsRefs [Capability] [CommandArugment]
+data Command
+    = LsRefs [Capability] [CommandArugment]
+    | Fetch [Capability] [CommandArugment]
+    deriving (Show)
 
 encodeCommand :: Command -> BL.ByteString
-encodeCommand (LsRefs capabilities cmdArgs) = encodeCmd' "command=ls-refs" capabilities cmdArgs
+encodeCommand (LsRefs capabilities cmdArgs) =
+    encodeCmd' "command=ls-refs" capabilities cmdArgs
+encodeCommand (Fetch capabilities cmdArgs) =
+    encodeCmd' "command=fetch" capabilities cmdArgs
+
+refsToFetch :: [Capability] -> [Ref] -> Command
+refsToFetch caps =
+    Fetch caps
+        . ("no-progress" :)
+        . map (("want " <>) . BLC.pack . show . refSha1)
 
 encodeCmd' :: BL.ByteString -> [Capability] -> [CommandArugment] -> BL.ByteString
 encodeCmd' cmd capabilities cmdArgs =
