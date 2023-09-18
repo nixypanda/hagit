@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module ObjectParse (gitContentToObject, parseSHA1Str, treeEntryParser) where
+module ObjectParse (gitContentToObject, parseSHA1Str, treeEntryParser, sha1Parser) where
 
 import Crypto.Hash (Digest, digestFromByteString)
 import Crypto.Hash.Algorithms (SHA1)
@@ -80,7 +80,8 @@ hexPairParser = do
         [(value, "")] -> return (fromIntegral value)
         _ -> fail "Invalid hexadecimal digits"
 
+sha1Parser :: Parser (Digest SHA1)
+sha1Parser = fromJust . digestFromByteString . BS.pack <$> hexStringParser
+
 parseSHA1Str :: BL.ByteString -> Either ParseError (Digest SHA1)
-parseSHA1Str bs = do
-    hexString <- parse hexStringParser "" bs
-    pure $ fromJust $ digestFromByteString $ BS.pack hexString
+parseSHA1Str = parse sha1Parser ""
