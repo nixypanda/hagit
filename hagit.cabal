@@ -79,6 +79,7 @@ test-suite hagit-test
       ObjectParseTests
       ObjectTests
       PktLineParseTests
+      PktLineTests
       Paths_hagit
   hs-source-dirs:
       test
