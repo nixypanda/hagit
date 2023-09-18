@@ -53,6 +53,7 @@ import System.FilePath (takeBaseName, (</>))
 import System.IO (IOMode (WriteMode), hPutStrLn, withFile)
 import System.IO.Error (tryIOError)
 import Text.Parsec (ParseError)
+import Utils (liftIOEither)
 
 data Command
     = Init
@@ -209,13 +210,13 @@ data CloneRepoOpts = CloneRepoOpts
 cloneRepo :: CloneRepoOpts -> GitM ()
 cloneRepo CloneRepoOpts{..} = do
     let expectedCapabilities = ["version 2", "object-format=sha1"]
-    eitherCapabilities <- liftIO $ discoverGitServerCapabilities repoUrlHTTPS
-    capabilities <- liftEither $ first HttpSmartErr eitherCapabilities
+    capabilities <-
+        liftIOEither
+            (first HttpSmartErr <$> discoverGitServerCapabilities repoUrlHTTPS)
     unless (all (`elem` capabilities) expectedCapabilities) $
         throwError $
             ServerCapabilitiesMismatch expectedCapabilities capabilities
-    eitherRefs <- liftIO $ lsRefs repoUrlHTTPS
-    refs <- liftEither $ first HttpSmartErr eitherRefs
+    refs <- liftIOEither $ first HttpSmartErr <$> lsRefs repoUrlHTTPS
     packfile <- liftIO $ fetch repoUrlHTTPS refs
     liftIO $ print packfile
 

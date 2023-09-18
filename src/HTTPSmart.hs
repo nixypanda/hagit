@@ -16,7 +16,7 @@ import Network.HTTP.Client (
     RequestBody (RequestBodyLBS),
     httpLbs,
     newManager,
-    parseRequest,
+    parseUrlThrow,
     responseBody,
  )
 import Network.HTTP.Client.TLS (tlsManagerSettings)
@@ -31,7 +31,7 @@ data HttpSmartError
 discoverGitServerCapabilities :: String -> IO (Either HttpSmartError [BL.ByteString])
 discoverGitServerCapabilities url = do
     httpManager <- newManager tlsManagerSettings
-    initReq <- parseRequest $ url <> "/info/refs"
+    initReq <- parseUrlThrow $ url <> "/info/refs"
     let params = [("service", "git-upload-pack")]
         headers =
             [ ("Accept", "application/x-git-upload-pack-advertisement")
@@ -44,14 +44,12 @@ discoverGitServerCapabilities url = do
                 }
     res <- httpLbs request httpManager
     let received = responseBody res
-    case parse gitServerCapabilitiesParser "" received of
-        Left err -> pure $ Left $ ParsingError err
-        Right caps -> pure $ Right caps
+    pure $ first ParsingError $ parse gitServerCapabilitiesParser "" received
 
 lsRefs :: String -> IO (Either HttpSmartError [Ref])
 lsRefs url = do
     httpManager <- newManager tlsManagerSettings
-    initReq <- parseRequest $ url <> "/git-upload-pack"
+    initReq <- parseUrlThrow $ "POST " <> url <> "/git-upload-pack"
     let
         cmdArgs =
             [ "peel"
@@ -68,8 +66,7 @@ lsRefs url = do
             ]
         request =
             initReq
-                { method = "POST"
-                , requestHeaders = headers
+                { requestHeaders = headers
                 , requestBody = RequestBodyLBS $ encodeCommand cmd
                 }
     res <- httpLbs request httpManager
@@ -79,7 +76,7 @@ lsRefs url = do
 fetch :: String -> [Ref] -> IO (Either HttpSmartError BL.ByteString)
 fetch url refs = do
     httpManager <- newManager tlsManagerSettings
-    initReq <- parseRequest $ url <> "/git-upload-pack"
+    initReq <- parseUrlThrow $ "POST " <> url <> "/git-upload-pack"
     let cmd = refsToFetch ["object-format=sha1"] refs
         headers =
             [ ("git-protocol", "version=2")
