@@ -34,7 +34,11 @@ testEncodeCmd =
                 , "0000"
                 ]
      in
-        TestCase $ assertEqual "Encoded command should match expected output" expectedOutput (encodeCommand cmd)
+        TestCase $
+            assertEqual
+                "Encoded command should match expected output"
+                expectedOutput
+                (encodeCommand cmd)
 
 commandTests :: [Test]
 commandTests = [testEncodeCmd]

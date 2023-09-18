@@ -11,7 +11,28 @@ import HTTPSmartParse (fetchOutput, lsResultParser)
 import Test.HUnit
 
 headSha1Str :: String
-headSha1Str = ['\x47', '\xb3', '\x7f', '\x1a', '\x82', '\xbf', '\xe8', '\x5f', '\x6d', '\x8d', '\xf5', '\x2b', '\x62', '\x58', '\xb7', '\x5e', '\x43', '\x43', '\xb7', '\xfd']
+headSha1Str =
+    [ '\x47'
+    , '\xb3'
+    , '\x7f'
+    , '\x1a'
+    , '\x82'
+    , '\xbf'
+    , '\xe8'
+    , '\x5f'
+    , '\x6d'
+    , '\x8d'
+    , '\xf5'
+    , '\x2b'
+    , '\x62'
+    , '\x58'
+    , '\xb7'
+    , '\x5e'
+    , '\x43'
+    , '\x43'
+    , '\xb7'
+    , '\xfd'
+    ]
 
 headSha1 :: Digest SHA1
 headSha1 = fromJust $ digestFromByteString $ BSC.pack headSha1Str

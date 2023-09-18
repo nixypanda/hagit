@@ -106,7 +106,8 @@ commitTreeParser =
                     <> long "author"
                     <> metavar
                         "NAME_AND_EMAIL"
-                    <> help "author name followed by email `Author Name <author@email.eg>`"
+                    <> help
+                        "author name followed by email `Author Name <author@email.eg>`"
                 )
             )
 

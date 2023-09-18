@@ -1,12 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..), lsRefs, fetch) where
+module HTTPSmart (
+    HttpSmartError (..),
+    discoverGitServerCapabilities,
+    lsRefs,
+    fetch,
+) where
 
 import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString.Lazy as BL (ByteString)
 import HTTPSmartCommand (Command (..), Ref, encodeCommand, refsToFetch)
 import HTTPSmartParse (fetchOutput, gitServerCapabilitiesParser, lsResultParser)
-import Network.HTTP.Client (Request (..), RequestBody (RequestBodyLBS), httpLbs, newManager, parseRequest, responseBody)
+import Network.HTTP.Client (
+    Request (..),
+    RequestBody (RequestBodyLBS),
+    httpLbs,
+    newManager,
+    parseRequest,
+    responseBody,
+ )
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (renderSimpleQuery)
 import Text.Parsec (ParseError, parse)
@@ -40,7 +52,15 @@ lsRefs :: String -> IO (Either HttpSmartError [Ref])
 lsRefs url = do
     httpManager <- newManager tlsManagerSettings
     initReq <- parseRequest $ url <> "/git-upload-pack"
-    let cmd = LsRefs ["object-format=sha1"] ["peel", "unborn", "ref-prefix HEAD", "ref-prefix refs/heads/", "ref-prefix refs/tags/"]
+    let
+        cmdArgs =
+            [ "peel"
+            , "unborn"
+            , "ref-prefix HEAD"
+            , "ref-prefix refs/heads/"
+            , "ref-prefix refs/tags/"
+            ]
+        cmd = LsRefs ["object-format=sha1"] cmdArgs
         headers =
             [ ("git-protocol", "version=2")
             , ("content-type", "application/x-git-upload-pack-request")
