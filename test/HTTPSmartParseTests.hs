@@ -7,7 +7,7 @@ import Data.ByteString.Char8 as BSC (pack)
 import Data.ByteString.Lazy as BL (concat)
 import Data.Maybe (fromJust)
 import HTTPSmartCommand (Ref (..))
-import HTTPSmartParse (lsResultParser)
+import HTTPSmartParse (fetchOutput, lsResultParser)
 import Test.HUnit
 
 headSha1Str :: String
@@ -36,5 +36,22 @@ testLsRefs =
                 (Right expected)
                 (lsResultParser input)
 
+testFetch :: Test
+testFetch =
+    let input =
+            BL.concat
+                [ "000dpackfile\n"
+                , "000a\x01PACK\n"
+                , "000a\x01\x00\x00\x00\x02\n"
+                , "000c\x01\x00\x00\x01L\x94\x0f\n"
+                , "0000"
+                ]
+        expected = "PACK\n\x00\x00\x00\x02\n\x00\x00\x01L\x94\x0f\n"
+     in TestCase $
+            assertEqual
+                "fetch command result is parsed successfully"
+                (Right expected)
+                (fetchOutput input)
+
 smartParserTests :: [Test]
-smartParserTests = [testLsRefs]
+smartParserTests = [testLsRefs, testFetch]

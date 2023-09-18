@@ -5,7 +5,7 @@ module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..), lsRefs, fe
 import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString.Lazy as BL (ByteString)
 import HTTPSmartCommand (Command (..), Ref, encodeCommand, refsToFetch)
-import HTTPSmartParse (gitServerCapabilitiesParser, lsResultParser)
+import HTTPSmartParse (fetchOutput, gitServerCapabilitiesParser, lsResultParser)
 import Network.HTTP.Client (Request (..), RequestBody (RequestBodyLBS), httpLbs, newManager, parseRequest, responseBody)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (renderSimpleQuery)
@@ -56,7 +56,7 @@ lsRefs url = do
     let received = responseBody res
     pure $ first ParsingError $ lsResultParser received
 
-fetch :: String -> [Ref] -> IO BL.ByteString
+fetch :: String -> [Ref] -> IO (Either HttpSmartError BL.ByteString)
 fetch url refs = do
     httpManager <- newManager tlsManagerSettings
     initReq <- parseRequest $ url <> "/git-upload-pack"
@@ -74,4 +74,4 @@ fetch url refs = do
                 }
     res <- httpLbs request httpManager
     let received = responseBody res
-    pure received
+    pure $ first ParsingError $ fetchOutput received
