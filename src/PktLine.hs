@@ -1,12 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module PktLine (
-    PktLine (..),
-    PktLineSpecial (..),
-    PktLineData (..),
+    PktLine,
+    PktLineSpecial,
+    PktLineData,
     isPktLineSpecial,
     getPktLineData,
     encodePktLine,
+    flushPkt,
+    delimiterPkt,
+    responseEndPkt,
+    dataPktLine,
 ) where
 
 import qualified Data.ByteString.Lazy as BL
@@ -27,9 +31,21 @@ data PktLineSpecial
     | ResponseEndPkt
     deriving (Show, Eq)
 
+flushPkt :: PktLine
+flushPkt = PktSpecial FlushPkt
+
+delimiterPkt :: PktLine
+delimiterPkt = PktSpecial DelimiterPkt
+
+responseEndPkt :: PktLine
+responseEndPkt = PktSpecial ResponseEndPkt
+
 newtype PktLineData = PktLineData
     {line :: BL.ByteString}
     deriving (Show, Eq)
+
+dataPktLine :: BL.ByteString -> PktLine
+dataPktLine = PktLine . PktLineData
 
 isPktLineSpecial :: PktLine -> Bool
 isPktLineSpecial (PktSpecial _) = True

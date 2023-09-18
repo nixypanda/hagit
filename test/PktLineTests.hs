@@ -4,21 +4,20 @@ module PktLineTests (pktLineTests) where
 
 import Test.HUnit
 
-import Data.Either (isLeft)
-import PktLine (PktLine (..), PktLineData (..), PktLineSpecial (..), encodePktLine)
+import PktLine (dataPktLine, encodePktLine, flushPkt)
 
 pktLineEncodingTests :: [Test]
 pktLineEncodingTests =
     [ TestCase
         ( assertEqual
             "PktLine is encoded properly when it has actual data"
-            (encodePktLine $ PktLine $ PktLineData "# service=git-upload-pack\n")
+            (encodePktLine $ dataPktLine "# service=git-upload-pack\n")
             "001e# service=git-upload-pack\n"
         )
     , TestCase
         ( assertEqual
             "PktLine encodes SpecialPkt FlushPkt properly"
-            (encodePktLine $ PktSpecial FlushPkt)
+            (encodePktLine flushPkt)
             "0000"
         )
     ]

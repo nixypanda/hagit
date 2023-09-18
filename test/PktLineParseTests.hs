@@ -5,7 +5,7 @@ module PktLineParseTests (pktLineParserTests) where
 import Test.HUnit
 
 import Data.Either (isLeft)
-import PktLine (PktLine (..), PktLineData (..), PktLineSpecial (..))
+import PktLine (dataPktLine, flushPkt)
 import PktLineParse (pktLineParser)
 import Text.Parsec (parse)
 
@@ -15,7 +15,7 @@ pktLineParserTests =
         ( assertEqual
             "PktLine is parsed properly when it has actual data"
             (parse pktLineParser "" "001e# service=git-upload-pack\n")
-            (Right $ PktLine $ PktLineData "# service=git-upload-pack\n")
+            (Right $ dataPktLine "# service=git-upload-pack\n")
         )
     , TestCase
         ( assertBool
@@ -26,7 +26,7 @@ pktLineParserTests =
         ( assertEqual
             "PktLine parses SpecialPkt FlushPkt properly"
             (parse pktLineParser "" "0000")
-            (Right $ PktSpecial FlushPkt)
+            (Right flushPkt)
         )
     , TestCase
         ( assertBool
