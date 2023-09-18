@@ -1,13 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmart (discoverGitServerCapabilities) where
+module HTTPSmart (discoverGitServerCapabilities, HttpSmartError (..)) where
 
 import Data.ByteString.Lazy as BL (ByteString)
+import HTTPSmartParse (gitServerCapabilitiesParser)
 import Network.HTTP.Client (Request (..), httpLbs, newManager, parseRequest, responseBody)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (renderSimpleQuery)
+import Text.Parsec (ParseError, parse)
 
-discoverGitServerCapabilities :: String -> IO BL.ByteString
+data HttpSmartError
+    = ParsingError ParseError
+    | InvalidStatus Int Int
+    deriving (Show)
+
+discoverGitServerCapabilities :: String -> IO (Either HttpSmartError [BL.ByteString])
 discoverGitServerCapabilities url = do
     httpManager <- newManager tlsManagerSettings
     initReq <- parseRequest $ url <> "/info/refs"
@@ -21,6 +28,8 @@ discoverGitServerCapabilities url = do
                 { queryString = renderSimpleQuery True params
                 , requestHeaders = headers
                 }
-    print request
     res <- httpLbs request httpManager
-    pure $ responseBody res
+    let received = responseBody res
+    case parse gitServerCapabilitiesParser "" received of
+        Left err -> pure $ Left $ ParsingError err
+        Right caps -> pure $ Right caps

@@ -16,8 +16,8 @@ module Lib (
 ) where
 
 import Codec.Compression.Zlib (decompress)
-import Control.Monad (forM)
-import Control.Monad.Except (ExceptT, MonadError, liftEither, when)
+import Control.Monad (forM, unless)
+import Control.Monad.Except (ExceptT, MonadError, liftEither, throwError, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.Hash (Digest, SHA1)
 import Data.Bifunctor (first)
@@ -31,7 +31,7 @@ import Data.ByteString.Lazy.UTF8 as BLU (fromString)
 import Data.List (sort)
 import Data.Maybe (fromMaybe)
 import Data.Time (getCurrentTime)
-import HTTPSmart (discoverGitServerCapabilities)
+import HTTPSmart (HttpSmartError, discoverGitServerCapabilities)
 import Object (
     GitObject (..),
     ObjectType (..),
@@ -67,6 +67,8 @@ data GitError
     = InvalidSHA1 ParseError
     | GitContentParseError ParseError
     | UnexpectedObjectError ObjectType ObjectType
+    | HttpSmartErr HttpSmartError
+    | ServerCapabilitiesMismatch [BL.ByteString] [BL.ByteString]
     | IOErr IOError
     deriving (Show)
 
@@ -206,7 +208,12 @@ data CloneRepoOpts = CloneRepoOpts
 
 cloneRepo :: CloneRepoOpts -> GitM ()
 cloneRepo CloneRepoOpts{..} = do
-    capabilities <- liftIO $ discoverGitServerCapabilities repoUrlHTTPS
+    let expectedCapabilities = ["version 2", "object-format=sha1"]
+    eitherCapabilities <- liftIO $ discoverGitServerCapabilities repoUrlHTTPS
+    capabilities <- liftEither $ first HttpSmartErr eitherCapabilities
+    unless (all (`elem` capabilities) expectedCapabilities) $
+        throwError $
+            ServerCapabilitiesMismatch expectedCapabilities capabilities
     liftIO $ print capabilities
 
 -- Helpers
