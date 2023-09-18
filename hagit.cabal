@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       HTTPSmart
+      HTTPSmartCommand
       HTTPSmartParse
       Lib
       Object
@@ -76,6 +77,7 @@ test-suite hagit-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      HTTPSmartCommandTests
       ObjectParseTests
       ObjectTests
       PktLineParseTests

@@ -1,3 +1,4 @@
+import HTTPSmartCommandTests (commandTests)
 import ObjectParseTests (parserTests)
 import ObjectTests (objectTests)
 import PktLineParseTests (pktLineParserTests)
@@ -11,6 +12,7 @@ tests =
             <> objectTests
             <> pktLineParserTests
             <> pktLineTests
+            <> commandTests
 
 main :: IO ()
 main = do
