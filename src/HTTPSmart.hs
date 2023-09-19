@@ -21,7 +21,7 @@ import Network.HTTP.Client (
  )
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types (renderSimpleQuery)
-import Text.Parsec (ParseError, parse)
+import ParsingUtils (ParseError)
 
 data HttpSmartError
     = ParsingError ParseError
@@ -44,7 +44,7 @@ discoverGitServerCapabilities url = do
                 }
     res <- httpLbs request httpManager
     let received = responseBody res
-    pure $ first ParsingError $ parse gitServerCapabilitiesParser "" received
+    pure $ first ParsingError $ gitServerCapabilitiesParser received
 
 lsRefs :: String -> IO (Either HttpSmartError [Ref])
 lsRefs url = do

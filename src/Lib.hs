@@ -47,12 +47,12 @@ import Object (
     objSha1Str,
     objType,
  )
-import ObjectParse (gitContentToObject, parseSHA1Str)
+import ObjectParse (gitContentToObject)
+import ParsingUtils (ParseError, parseSHA1Str)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
 import System.FilePath (takeBaseName, (</>))
 import System.IO (IOMode (WriteMode), hPutStrLn, withFile)
 import System.IO.Error (tryIOError)
-import Text.Parsec (ParseError)
 import Utils (liftIOEither)
 
 data Command

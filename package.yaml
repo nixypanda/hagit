@@ -48,10 +48,12 @@ library:
     - http-types
     - memory
     - mtl
-    - parsec
+    - attoparsec
     - time
     - utf8-string
+    - word8
     - zlib
+    - HUnit
 
 executables:
   hagit-exe:
@@ -78,7 +80,7 @@ tests:
     dependencies:
       - hagit
       - HUnit
-      - parsec
+      - attoparsec
       - cryptonite
       - bytestring
       - zlib

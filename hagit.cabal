@@ -31,6 +31,7 @@ library
       Lib
       Object
       ObjectParse
+      ParsingUtils
       PktLine
       PktLineParse
       Utils
@@ -40,7 +41,9 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base
+      HUnit
+    , attoparsec
+    , base
     , binary
     , byteable
     , bytestring
@@ -52,9 +55,9 @@ library
     , http-types
     , memory
     , mtl
-    , parsec
     , time
     , utf8-string
+    , word8
     , zlib
   default-language: Haskell2010
 
@@ -89,10 +92,10 @@ test-suite hagit-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       HUnit
+    , attoparsec
     , base >=4.7 && <5
     , bytestring
     , cryptonite
     , hagit
-    , parsec
     , zlib
   default-language: Haskell2010

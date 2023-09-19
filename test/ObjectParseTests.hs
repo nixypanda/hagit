@@ -5,12 +5,13 @@ module ObjectParseTests (parserTests) where
 import Test.HUnit
 
 import Crypto.Hash (Digest, SHA1, digestFromByteString)
+import Data.Attoparsec.ByteString.Lazy (parseOnly)
 import Data.ByteString.Char8 as BSC (pack)
 import Data.ByteString.Lazy as BL (concat)
 import Data.Maybe (fromJust)
 import Object (GitObject (..), TreeEntry (..))
 import ObjectParse (gitContentToObject, treeEntryParser)
-import Text.Parsec (parse)
+import ParsingUtils (sha1Parser)
 
 sha1String :: String
 sha1String =
@@ -39,6 +40,18 @@ sha1String =
 sha1 :: Digest SHA1
 sha1 = fromJust $ digestFromByteString $ BSC.pack sha1String
 
+sha1ParserTest :: Test
+sha1ParserTest =
+    let
+        input = "\131\146\209Y\242\231\CAN%\STX\DEL\214\175Xc\210\CAN\184\181\249\203"
+     in
+        TestCase
+            ( assertEqual
+                "sha1Parser parser a blob entry properly"
+                (Right sha1)
+                (parseOnly sha1Parser input)
+            )
+
 treeEntryParserTestBasic :: Test
 treeEntryParserTestBasic =
     let
@@ -51,8 +64,8 @@ treeEntryParserTestBasic =
         TestCase
             ( assertEqual
                 "treeEntryParser parser a blob entry properly"
-                (parse treeEntryParser "" input)
                 (Right $ TreeEntry "100644" "somefile.txt" sha1)
+                (parseOnly treeEntryParser input)
             )
 
 treeParserTest :: Test
@@ -71,12 +84,12 @@ treeParserTest =
         TestCase
             ( assertEqual
                 "treeParser pases blob entry and tree entry with space properly"
-                (gitContentToObject input)
                 (Right expected)
+                (gitContentToObject input)
             )
 
 treeEntryParserTests :: [Test]
 treeEntryParserTests = [treeEntryParserTestBasic]
 
 parserTests :: [Test]
-parserTests = treeEntryParserTests <> [treeParserTest]
+parserTests = treeEntryParserTests <> [treeParserTest] <> [sha1ParserTest]

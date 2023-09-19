@@ -2,26 +2,22 @@
 
 module PktLineParse (pktLineParser, pktLinesParser) where
 
+import Data.Attoparsec.ByteString.Char8 (hexadecimal)
+import Data.Attoparsec.ByteString.Lazy (Parser, count, many', parseOnly, satisfy, take)
 import Data.Binary (Word16)
-import Data.ByteString.Lazy.Char8 as BLC (pack)
-import Numeric (readHex)
+import Data.ByteString.Lazy as BL (fromStrict, pack)
+import Data.Word8 (isHexDigit)
 import PktLine (PktLine, dataPktLine, delimiterPkt, flushPkt, responseEndPkt)
-import Text.Parsec (
-    count,
-    hexDigit,
-    many,
- )
-import Text.Parsec.ByteString.Lazy (Parser)
-import Text.Parsec.Char (anyChar)
+import Prelude hiding (take)
 
 pktLineLengthSize :: Int
 pktLineLengthSize = 4
 
 hexNumber :: Parser Word16
 hexNumber = do
-    hexDigits <- count 4 hexDigit
-    case readHex hexDigits of
-        [(n, _)] -> return n
+    hexDigits <- count 4 (satisfy isHexDigit)
+    case parseOnly hexadecimal (BL.pack hexDigits) of
+        Right n -> pure n
         _ -> fail "Invalid hexadecimal number"
 
 pktLineParser :: Parser PktLine
@@ -35,8 +31,8 @@ pktLineParser = do
         4 -> fail "Invalid packet length: 4"
         n -> do
             let len = n - pktLineLengthSize
-            pktData <- count len anyChar
-            pure $ dataPktLine $ BLC.pack pktData
+            pktData <- take len
+            pure $ dataPktLine $ fromStrict pktData
 
 pktLinesParser :: Parser [PktLine]
-pktLinesParser = many pktLineParser
+pktLinesParser = many' pktLineParser
