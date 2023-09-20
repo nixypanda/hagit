@@ -1,4 +1,8 @@
-module ZlibDecompression (DecompressionResult (..), decompressPartial) where
+module ZlibDecompression (
+    DecompressionResult (..),
+    DecompressError,
+    decompressPartial,
+) where
 
 import Codec.Compression.Zlib (defaultDecompressParams)
 import Codec.Compression.Zlib.Internal (
