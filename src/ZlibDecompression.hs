@@ -18,8 +18,16 @@ import Data.Attoparsec.Internal.Types qualified as AIT
 import Data.ByteString.Lazy qualified as BL
 import Prelude hiding (take)
 
+-- This parser essentially just takes the input and decompresses it upto a point
+-- it sees valid zlib compressed data.
 decompressParser :: Parser BL.ByteString
 decompressParser = do
+    -- Very inefficient, but it works
+    -- Need a better way to do this
+    --
+    -- Potential optimizations:
+    -- \* Send only (objectSize data)
+    -- \* Utilize the streaming API properly and do this in chunks
     everything <- takeLazyByteString
     case decompressPartial everything of
         Left err -> fail $ show err
