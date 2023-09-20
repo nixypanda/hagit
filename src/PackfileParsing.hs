@@ -9,17 +9,15 @@ import Crypto.Hash (Digest, SHA1, hashlazy)
 import Data.Attoparsec.ByteString.Lazy (
     Parser,
     anyWord8,
+    count,
     endOfInput,
     parseOnly,
     take,
-    takeLazyByteString,
  )
-import Data.Bifunctor (first)
 import Data.Bits (shiftL, shiftR, (.&.), (.|.))
 import Data.ByteString.Lazy qualified as BL
-import Data.Int (Int64)
-import ParsingUtils (ParseError, sha1Parser)
-import ZlibDecompression (DecompressError, DecompressionResult (..), decompressPartial)
+import ParsingUtils (sha1Parser)
+import ZlibDecompression (decompressParser)
 import Prelude hiding (take)
 
 -- == pack-*.pack files have the following format:
@@ -56,16 +54,6 @@ import Prelude hiding (take)
 --      length format and is not constrained to 32-bit or anything.
 --
 --   - The trailer records a pack checksum of all of the above.
-
-data PackfileError
-    = PackParseError ParseError
-    | PackDecompressionError DecompressError
-    | PackDecompressionErrorObjectSizeMismatch Int64 Int64
-    | PackDecompressionErrorObjectNumberMismatch Int Int
-    | PackIntegrityErrorChecksumMismatch (Digest SHA1) (Digest SHA1)
-    | PackUnsupportedVersion Int Int
-    | PackUnsupportedObjectError ObjectType
-    deriving (Show)
 
 data PackfileWithDeltas = PackfileWithDeltas
     { packfileHeader :: PackfileHeader
@@ -124,33 +112,26 @@ data ObjectType
 
 -- Packfile Parsing
 
-parsePackfile :: BL.ByteString -> Either PackfileError PackfileWithDeltas
-parsePackfile input = do
-    let inputWithOutChecksum = BL.dropEnd 20 input
-        checksumStr = BL.takeEnd 20 input
-        computedChecksum = hashlazy inputWithOutChecksum
-    receivedChecksum <- packParse (sha1Parser <* endOfInput) checksumStr
-    unless (computedChecksum == receivedChecksum) $
-        Left (PackIntegrityErrorChecksumMismatch receivedChecksum computedChecksum)
-
-    (packfileHeader@PackfileHeader{..}, remainingInput) <-
-        packParse wrarppedPackHeaderParser inputWithOutChecksum
-
+packfileParser :: Parser PackfileWithDeltas
+packfileParser = do
+    packfileHeader@PackfileHeader{..} <- parsePackHeader
     unless (magicString == "PACK") $
-        Left (PackParseError "Not a pack file: Magic string mismatch")
+        fail "Not a pack file: Magic string mismatch"
     unless (packfileVersion == 2) $
-        Left (PackUnsupportedVersion packfileVersion 2)
-
-    packfileObjects <- parseObjects remainingInput
-    unless (length packfileObjects == objectsInPackfile) $
-        Left (PackDecompressionErrorObjectNumberMismatch objectsInPackfile (length packfileObjects))
-
+        fail ("Unsupported packfile version: (Expected 2, Got: " <> show packfileVersion <> ")")
+    packfileObjects <- count objectsInPackfile objectParser
+    receivedChecksum <- sha1Parser <* endOfInput
     pure PackfileWithDeltas{..}
-  where
-    wrarppedPackHeaderParser = do
-        header <- parsePackHeader
-        rest <- takeLazyByteString
-        pure (header, rest)
+
+parsePackfile :: BL.ByteString -> Either String PackfileWithDeltas
+parsePackfile input = do
+    packfile <- parseOnly packfileParser input
+    let inputWithoutChecksum = BL.dropEnd 20 input
+        computedChecksum = hashlazy inputWithoutChecksum
+        rcvdChecksum = receivedChecksum packfile
+    unless (rcvdChecksum == computedChecksum) $
+        Left ("Checksum Mismatch: Expected: " <> show rcvdChecksum <> ", Got: " <> show computedChecksum)
+    pure packfile
 
 -- Packfile Header Parsing
 
@@ -229,46 +210,26 @@ objHeaderParser = do
 
 -- Undeltified and deltified object
 
-parseObject :: BL.ByteString -> Either PackfileError (RawObject, BL.ByteString)
-parseObject remaining = do
-    (rawObjHeader, remaining') <- packParse wrappedHeaderParser remaining
+objectParser :: Parser RawObject
+objectParser = do
+    rawObjHeader <- objHeaderParser
     let expectedSize = fromIntegral $ objSize rawObjHeader
     case objType rawObjHeader of
         OBJ_OFS_DELTA ->
-            Left $ PackUnsupportedObjectError OBJ_OFS_DELTA
+            fail $ "Unsupported object type: " <> show OBJ_OFS_DELTA
         OBJ_REF_DELTA -> do
-            (parentSha1, remaining'') <- packParse wrappedSha1Parser remaining'
-            DecompressionResult{..} <- decompressPartial' remaining''
+            parentSha1 <- sha1Parser
+            decompressedData <- decompressParser
             let actualSize = BL.length decompressedData
             when (expectedSize /= actualSize) $
-                Left (PackDecompressionErrorObjectSizeMismatch expectedSize actualSize)
-            pure (mkDeltifiedObj rawObjHeader parentSha1 decompressedData, unconsumedInput)
+                fail (objSizeMismatch expectedSize actualSize)
+            pure $ mkDeltifiedObj rawObjHeader parentSha1 decompressedData
         _ -> do
-            DecompressionResult{..} <- decompressPartial' remaining'
+            decompressedData <- decompressParser
             let actualSize = BL.length decompressedData
             when (expectedSize /= actualSize) $
-                Left (PackDecompressionErrorObjectSizeMismatch expectedSize actualSize)
-            pure (mkUndeltifiedObj rawObjHeader decompressedData, unconsumedInput)
+                fail (objSizeMismatch expectedSize actualSize)
+            pure $ mkUndeltifiedObj rawObjHeader decompressedData
   where
-    wrappedHeaderParser = do
-        rawObjHeader <- objHeaderParser
-        rest <- takeLazyByteString
-        pure (rawObjHeader, rest)
-    wrappedSha1Parser = do
-        sha1 <- sha1Parser
-        rest <- takeLazyByteString
-        pure (sha1, rest)
-
-parseObjects :: BL.ByteString -> Either PackfileError [RawObject]
-parseObjects input = do
-    (obj, remainingInput) <- parseObject input
-    case parseObjects remainingInput of
-        Left (PackParseError "not enough input") -> pure [obj]
-        Left err -> Left err
-        Right rest -> pure (obj : rest)
-
-packParse :: Parser a -> BL.ByteString -> Either PackfileError a
-packParse parser input = first PackParseError $ parseOnly parser input
-
-decompressPartial' :: BL.ByteString -> Either PackfileError DecompressionResult
-decompressPartial' = first PackDecompressionError . decompressPartial
+    objSizeMismatch expected actual =
+        "Object size mismatch: (Expected: " <> show expected <> ", Actual: " <> show actual <> ")"
