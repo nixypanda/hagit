@@ -31,6 +31,7 @@ library
       Lib
       Object
       ObjectParse
+      PackfileParsing
       ParsingUtils
       PktLine
       PktLineParse
