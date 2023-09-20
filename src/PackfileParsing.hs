@@ -3,10 +3,7 @@
 
 module PackfileParsing (parsePackfile) where
 
-import Codec.Compression.Zlib (defaultDecompressParams)
-import Codec.Compression.Zlib.Internal (DecompressStream (..), decompressST, zlibFormat)
 import Control.Monad (unless, when)
-import Control.Monad.ST.Lazy (ST, runST)
 import Crypto.Hash (Digest, SHA1)
 import Data.Attoparsec.ByteString.Lazy (
     Parser,
@@ -15,9 +12,11 @@ import Data.Attoparsec.ByteString.Lazy (
     take,
     takeLazyByteString,
  )
+import Data.Bifunctor (first)
 import Data.Bits (shiftL, shiftR, (.&.), (.|.))
-import Data.ByteString.Lazy as BL (ByteString, empty, fromStrict, length, toStrict)
+import Data.ByteString.Lazy as BL (ByteString, fromStrict, length)
 import ParsingUtils (ParseError, sha1Parser)
+import ZlibDecompression (DecompressionResult (..), decompressPartial)
 import Prelude hiding (take)
 
 data ObjectType
@@ -111,27 +110,24 @@ data RawObject = RawUndeltified RawUndeltifiedObject | RawDeltified RawDeltified
 
 parseObject :: BL.ByteString -> Either String (RawObject, BL.ByteString)
 parseObject remainingPackfile = do
-    (objType', objSize, remainingPackfile') <- parseOnly wrappedTypeAndSizeParser remainingPackfile
-    case objType' of
+    (rawObjHeader, remainingPackfile') <- parseOnly wrappedTypeAndSizeParser remainingPackfile
+    case objType rawObjHeader of
         OBJ_OFS_DELTA ->
             Left "Unsupported object type: Offest based delta objects are not yet supported"
         OBJ_REF_DELTA -> do
             (parentSha1, remainingPackfile'') <- parseOnly wrappedSha1Parser remainingPackfile'
-            (deltaObjData, remainingPackfile''') <- decompressPartial remainingPackfile''
-            let objType = OBJ_REF_DELTA
-            let deltaObjHeader = RawObjectHeader{..}
-            when (objSize /= fromIntegral (BL.length deltaObjData)) $ Left "Invalid object size"
-            pure (RawDeltified RawDeltifiedObject{..}, remainingPackfile''')
-        objType -> do
-            (objData, remainingPackfile'') <- decompressPartial remainingPackfile'
-            let objHeader = RawObjectHeader{..}
-            when (objSize /= fromIntegral (BL.length objData)) $ Left "Invalid object size"
-            pure (RawUndeltified RawUndeltifiedObject{..}, remainingPackfile'')
+            DecompressionResult{..} <- first show $ decompressPartial remainingPackfile''
+            when (objSize rawObjHeader /= fromIntegral (BL.length decompressedData)) $ Left "Invalid object size"
+            pure (RawDeltified $ RawDeltifiedObject rawObjHeader decompressedData parentSha1, unconsumedInput)
+        _ -> do
+            DecompressionResult{..} <- first show $ decompressPartial remainingPackfile'
+            when (objSize rawObjHeader /= fromIntegral (BL.length decompressedData)) $ Left "Invalid object size"
+            pure (RawUndeltified $ RawUndeltifiedObject rawObjHeader decompressedData, unconsumedInput)
   where
     wrappedTypeAndSizeParser = do
-        (t, s) <- typeAndSizeParser
+        rawObjHeader <- typeAndSizeParser
         rest <- takeLazyByteString
-        pure (t, s, rest)
+        pure (rawObjHeader, rest)
     wrappedSha1Parser = do
         sha1 <- sha1Parser
         rest <- takeLazyByteString
@@ -152,22 +148,3 @@ parsePackfile input = do
     pure (objects, Prelude.length objects, remainingInput)
   where
     wrarppedPackHeaderParser = parsePackHeader *> takeLazyByteString
-
-decompressPartial :: BL.ByteString -> Either String (BL.ByteString, BL.ByteString)
-decompressPartial input = do
-    let decompresser = decompressST zlibFormat defaultDecompressParams
-    runST $ decompressLoop input BL.empty decompresser
-
-decompressLoop ::
-    BL.ByteString ->
-    BL.ByteString ->
-    DecompressStream (ST s) ->
-    ST s (Either String (BL.ByteString, BL.ByteString))
-decompressLoop input output (DecompressInputRequired next) = do
-    decompressLoop BL.empty output =<< next (BL.toStrict input)
-decompressLoop input output (DecompressOutputAvailable outChunk next) = do
-    decompressLoop input (output `mappend` BL.fromStrict outChunk) =<< next
-decompressLoop _ output (DecompressStreamEnd unconsumedInput) = do
-    pure $ Right (output, BL.fromStrict unconsumedInput)
-decompressLoop _ _ (DecompressStreamError err) =
-    pure $ Left $ show err

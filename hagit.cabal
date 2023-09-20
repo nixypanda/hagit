@@ -36,6 +36,7 @@ library
       PktLine
       PktLineParse
       Utils
+      ZlibDecompression
   other-modules:
       Paths_hagit
   hs-source-dirs:
