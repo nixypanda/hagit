@@ -1,10 +1,11 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module HTTPSmartParseTests (smartParserTests) where
 
 import Crypto.Hash (Digest, SHA1, digestFromByteString)
-import Data.ByteString.Char8 as BSC (pack)
-import Data.ByteString.Lazy as BL (concat)
+import Data.ByteString.Char8 qualified as BSC
+import Data.ByteString.Lazy qualified as BL
 import Data.Maybe (fromJust)
 import HTTPSmartCommand (Ref (..))
 import HTTPSmartParse (fetchOutput, lsResultParser)

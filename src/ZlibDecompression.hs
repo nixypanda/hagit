@@ -1,3 +1,5 @@
+{-# LANGUAGE ImportQualifiedPost #-}
+
 module ZlibDecompression (
     DecompressionResult (..),
     DecompressError,
@@ -12,7 +14,7 @@ import Codec.Compression.Zlib.Internal (
     zlibFormat,
  )
 import Control.Monad.ST.Lazy (ST, runST)
-import Data.ByteString.Lazy as BL (ByteString, empty, fromStrict, toStrict)
+import Data.ByteString.Lazy qualified as BL
 import Prelude hiding (take)
 
 data DecompressionResult = DecompressionResult

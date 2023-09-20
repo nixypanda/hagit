@@ -1,8 +1,9 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module HTTPSmartCommandTests (commandTests) where
 
-import Data.ByteString.Lazy as BL (concat)
+import Data.ByteString.Lazy qualified as BL
 import HTTPSmartCommand (Command (..), encodeCommand)
 import Test.HUnit
 

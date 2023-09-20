@@ -1,11 +1,12 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module PktLineParse (pktLineParser, pktLinesParser) where
 
 import Data.Attoparsec.ByteString.Char8 (hexadecimal)
 import Data.Attoparsec.ByteString.Lazy (Parser, count, many', parseOnly, satisfy, take)
-import Data.Binary (Word16)
-import Data.ByteString.Lazy as BL (fromStrict, pack)
+import Data.ByteString.Lazy qualified as BL
+import Data.Word (Word16)
 import Data.Word8 (isHexDigit)
 import PktLine (PktLine, dataPktLine, delimiterPkt, flushPkt, responseEndPkt)
 import Prelude hiding (take)
@@ -32,7 +33,7 @@ pktLineParser = do
         n -> do
             let len = n - pktLineLengthSize
             pktData <- take len
-            pure $ dataPktLine $ fromStrict pktData
+            pure $ dataPktLine $ BL.fromStrict pktData
 
 pktLinesParser :: Parser [PktLine]
 pktLinesParser = many' pktLineParser

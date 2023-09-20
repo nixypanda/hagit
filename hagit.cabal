@@ -46,8 +46,6 @@ library
       HUnit
     , attoparsec
     , base
-    , binary
-    , byteable
     , bytestring
     , cryptonite
     , directory
@@ -58,7 +56,6 @@ library
     , memory
     , mtl
     , time
-    , utf8-string
     , word8
     , zlib
   default-language: Haskell2010

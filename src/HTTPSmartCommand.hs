@@ -1,10 +1,16 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module HTTPSmartCommand (encodeCommand, Command (..), Ref (..), refsToFetch) where
+module HTTPSmartCommand (
+    encodeCommand,
+    Command (..),
+    Ref (..),
+    refsToFetch,
+) where
 
 import Crypto.Hash (Digest, SHA1)
-import Data.ByteString.Lazy as BL (ByteString, concat, snoc)
-import Data.ByteString.Lazy.Char8 as BLC (pack)
+import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC
 import Data.Char (ord)
 import Data.Word (Word8)
 import PktLine (dataPktLine, delimiterPkt, encodePktLine, flushPkt)

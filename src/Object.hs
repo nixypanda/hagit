@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -22,9 +23,8 @@ module Object (
 
 import Codec.Compression.Zlib (compress)
 import Crypto.Hash (Digest, SHA1, hashlazy)
-import Data.ByteString.Lazy as BL (ByteString, length)
-import Data.ByteString.Lazy.Char8 as BLC (pack)
-import Data.ByteString.Lazy.UTF8 as BLU (fromString, toString)
+import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC
 import Data.Time (UTCTime, formatTime)
 import Data.Time.Format (defaultTimeLocale)
 import GHC.Generics (Generic)
@@ -103,14 +103,14 @@ entryBody TreeEntry{..} =
 
 entryBodyStr :: TreeEntry -> String
 entryBodyStr TreeEntry{..} =
-    printf "%6s " (BLU.toString entryMode)
+    printf "%6s " (BLC.unpack entryMode)
         <> " "
         <> show entrySha1
         <> " "
-        <> BLU.toString entryName
+        <> BLC.unpack entryName
 
 entryNameStr :: TreeEntry -> String
-entryNameStr = BLU.toString . entryName
+entryNameStr = BLC.unpack . entryName
 
 createCommitObject ::
     Digest SHA1 ->
@@ -135,6 +135,6 @@ commitBody commit =
             <> "author "
             <> author'
             <> " "
-            <> BLU.fromString (formatTime defaultTimeLocale "%s" (commitTime commit))
+            <> BLC.pack (formatTime defaultTimeLocale "%s" (commitTime commit))
             <> " +0000\n\n"
             <> commitMessage commit

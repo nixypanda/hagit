@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ObjectParseTests (parserTests) where
@@ -6,8 +7,8 @@ import Test.HUnit
 
 import Crypto.Hash (Digest, SHA1, digestFromByteString)
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
-import Data.ByteString.Char8 as BSC (pack)
-import Data.ByteString.Lazy as BL (concat)
+import Data.ByteString.Char8 qualified as BSC
+import Data.ByteString.Lazy qualified as BL
 import Data.Maybe (fromJust)
 import Object (GitObject (..), TreeEntry (..))
 import ObjectParse (gitContentToObject, treeEntryParser)

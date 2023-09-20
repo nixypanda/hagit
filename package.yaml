@@ -37,8 +37,6 @@ library:
   source-dirs: src
   dependencies:
     - base
-    - binary
-    - byteable
     - bytestring
     - cryptonite
     - directory
@@ -50,7 +48,6 @@ library:
     - mtl
     - attoparsec
     - time
-    - utf8-string
     - word8
     - zlib
     - HUnit

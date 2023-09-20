@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module HTTPSmart (
@@ -8,7 +9,7 @@ module HTTPSmart (
 ) where
 
 import Data.Bifunctor (Bifunctor (first))
-import Data.ByteString.Lazy as BL (ByteString)
+import Data.ByteString.Lazy qualified as BL
 import HTTPSmartCommand (Command (..), Ref, encodeCommand, refsToFetch)
 import HTTPSmartParse (fetchOutput, gitServerCapabilitiesParser, lsResultParser)
 import Network.HTTP.Client (

@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -21,13 +22,9 @@ import Control.Monad.Except (ExceptT, MonadError, liftEither, throwError, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.Hash (Digest, SHA1)
 import Data.Bifunctor (first)
-import Data.ByteString.Lazy as BL (
-    ByteString,
-    putStr,
-    readFile,
-    writeFile,
- )
-import Data.ByteString.Lazy.UTF8 as BLU (fromString)
+import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC
+import Data.Either (fromRight)
 import Data.List (sort)
 import Data.Maybe (fromMaybe)
 import Data.Time (getCurrentTime)
@@ -48,10 +45,11 @@ import Object (
     objType,
  )
 import ObjectParse (gitContentToObject)
+import PackfileParsing (parsePackfile)
 import ParsingUtils (ParseError, parseSHA1Str)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
 import System.FilePath (takeBaseName, (</>))
-import System.IO (IOMode (WriteMode), hPutStrLn, withFile)
+import System.IO (IOMode (..), hPutStrLn, withBinaryFile, withFile)
 import System.IO.Error (tryIOError)
 import Utils (liftIOEither)
 
@@ -71,6 +69,7 @@ data GitError
     | HttpSmartErr HttpSmartError
     | ServerCapabilitiesMismatch [BL.ByteString] [BL.ByteString]
     | IOErr IOError
+    | DevTest
     deriving (Show)
 
 newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
@@ -165,7 +164,7 @@ writeTree' basePath = do
                 let doCreate = True
                 gitObject <- hashObject' doCreate path
                 let entryMode = fileMode
-                    entryName = BLU.fromString filepath
+                    entryName = BLC.pack filepath
                     entrySha1 = objSha1 gitObject
                 pure $ TreeEntry{..}
 
@@ -173,7 +172,7 @@ writeTree' basePath = do
     writeObject tree
 
     let entryMode = dirMode
-        entryName = BLU.fromString $ takeBaseName basePath
+        entryName = BLC.pack $ takeBaseName basePath
         entrySha1 = objSha1 tree
     pure $ TreeEntry{..}
 
@@ -209,6 +208,10 @@ data CloneRepoOpts = CloneRepoOpts
 
 cloneRepo :: CloneRepoOpts -> GitM ()
 cloneRepo CloneRepoOpts{..} = do
+    -- Remove these two lines
+    liftIO cloneTest
+    _ <- throwError DevTest
+
     let expectedCapabilities = ["version 2", "object-format=sha1"]
     capabilities <-
         liftIOEither
@@ -218,7 +221,13 @@ cloneRepo CloneRepoOpts{..} = do
             ServerCapabilitiesMismatch expectedCapabilities capabilities
     refs <- liftIOEither $ first HttpSmartErr <$> lsRefs repoUrlHTTPS
     packfile <- liftIO $ fetch repoUrlHTTPS refs
-    liftIO $ print packfile
+    liftIO $ BL.putStr (fromRight "" packfile)
+
+cloneTest :: IO ()
+cloneTest = do
+    withBinaryFile "git-sample-1.pack" ReadMode $ \handle -> do
+        content <- BL.hGetContents handle
+        print $ parsePackfile content
 
 -- Helpers
 

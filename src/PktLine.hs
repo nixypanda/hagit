@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module PktLine (
@@ -13,8 +14,8 @@ module PktLine (
     dataPktLine,
 ) where
 
-import qualified Data.ByteString.Lazy as BL
-import Data.ByteString.Lazy.Char8 as BLC (pack)
+import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC
 import Text.Printf (printf)
 
 gitProtocolV2Reserved :: Int

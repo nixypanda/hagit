@@ -1,13 +1,20 @@
-module ParsingUtils (ParseError, parseSHA1Str, sha1StrParser, sha1Parser) where
+{-# LANGUAGE ImportQualifiedPost #-}
+
+module ParsingUtils (
+    ParseError,
+    parseSHA1Str,
+    sha1StrParser,
+    sha1Parser,
+) where
 
 import Crypto.Hash (Digest, digestFromByteString)
 import Crypto.Hash.Algorithms (SHA1)
 import Data.Attoparsec.ByteString.Char8 (hexadecimal)
 import Data.Attoparsec.ByteString.Lazy (Parser, anyWord8, count, parseOnly, satisfy)
-import Data.Binary (Word8)
-import Data.ByteString as BS (pack)
-import Data.ByteString.Lazy as BL (ByteString, pack)
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BL
 import Data.Maybe (fromJust)
+import Data.Word (Word8)
 import Data.Word8 (isHexDigit)
 import Prelude hiding (take, takeWhile)
 

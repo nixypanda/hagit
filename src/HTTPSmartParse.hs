@@ -1,12 +1,17 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module HTTPSmartParse (gitServerCapabilitiesParser, lsResultParser, fetchOutput) where
+module HTTPSmartParse (
+    gitServerCapabilitiesParser,
+    lsResultParser,
+    fetchOutput,
+) where
 
 import Data.Attoparsec.ByteString.Char8 (char)
 import Data.Attoparsec.ByteString.Lazy (Parser, parseOnly, string, takeLazyByteString)
-import Data.ByteString.Lazy as BL (ByteString, dropEnd)
-import Data.ByteString.Lazy.Char8 as BLC (concat)
+import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC
 import HTTPSmartCommand (Ref (..))
 import ParsingUtils (ParseError, sha1StrParser)
 import PktLine (PktLine, getPktLineData, isPktLineSpecial)

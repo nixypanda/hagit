@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -15,8 +16,8 @@ import Data.Attoparsec.ByteString.Lazy (
     take,
     takeWhile,
  )
-import Data.ByteString.Lazy as BL (ByteString, fromStrict)
-import Data.ByteString.Lazy.Char8 as BLC (pack)
+import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC (pack)
 import Data.Word8 (_nul)
 import Object (GitObject (..), TreeEntry (..))
 import ParsingUtils (ParseError, sha1Parser)
