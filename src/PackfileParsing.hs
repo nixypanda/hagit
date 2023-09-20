@@ -152,62 +152,6 @@ getIntbe = do
 
 -- Packfile Object Parsing
 
--- Type and size encoding
---
--- === Type encdoding
--- Valid object types are:
---
--- - OBJ_COMMIT (1)
--- - OBJ_TREE (2)
--- - OBJ_BLOB (3)
--- - OBJ_TAG (4)
--- - OBJ_OFS_DELTA (6)
--- - OBJ_REF_DELTA (7)
---
--- Type 5 is reserved for future expansion. Type 0 is invalid.
---
--- === Size encoding
---
--- This document uses the following "size encoding" of non-negative
--- integers: From each byte, the seven least significant bits are
--- used to form the resulting integer. As long as the most significant
--- bit is 1, this process continues; the byte with MSB 0 provides the
--- last seven bits.  The seven-bit chunks are concatenated. Later
--- values are more significant.
-
-intToObjectType :: Int -> Maybe ObjectType
-intToObjectType 1 = Just OBJ_COMMIT
-intToObjectType 2 = Just OBJ_TREE
-intToObjectType 3 = Just OBJ_BLOB
-intToObjectType 4 = Just OBJ_TAG
-intToObjectType 6 = Just OBJ_OFS_DELTA
-intToObjectType 7 = Just OBJ_REF_DELTA
-intToObjectType _ = Nothing
-
-isMsbSet :: Int {- 8 bit int -} -> Bool
-isMsbSet w = w .&. 0x80 /= 0
-
-objSizeParser :: Int -> Int -> Parser Int
-objSizeParser sizeSoFar iteration = do
-    nextByte <- fromIntegral <$> anyWord8
-    let sizeToAdd = (nextByte .&. 0x7f) `shiftL` (4 + iteration * 7)
-        newSize = sizeSoFar + sizeToAdd
-    if isMsbSet nextByte
-        then objSizeParser newSize (iteration + 1)
-        else pure newSize
-
-objHeaderParser :: Parser RawObjectHeader
-objHeaderParser = do
-    byte <- fromIntegral <$> anyWord8
-    let objectTypeInt = (byte `shiftR` 4) .&. 0x7
-    let maybeObjectType = intToObjectType objectTypeInt
-    let szSoFar = byte .&. 0xf
-    case maybeObjectType of
-        Nothing -> fail $ "Invalid object type: " <> show objectTypeInt
-        Just objType -> do
-            objSize <- if isMsbSet byte then objSizeParser szSoFar 0 else pure szSoFar
-            pure RawObjectHeader{..}
-
 -- Undeltified and deltified object
 
 objectParser :: Parser RawObject
@@ -233,3 +177,59 @@ objectParser = do
   where
     objSizeMismatch expected actual =
         "Object size mismatch: (Expected: " <> show expected <> ", Actual: " <> show actual <> ")"
+
+-- Type and size encoding
+--
+-- === Type encdoding
+-- Valid object types are:
+--
+-- - OBJ_COMMIT (1)
+-- - OBJ_TREE (2)
+-- - OBJ_BLOB (3)
+-- - OBJ_TAG (4)
+-- - OBJ_OFS_DELTA (6)
+-- - OBJ_REF_DELTA (7)
+--
+-- Type 5 is reserved for future expansion. Type 0 is invalid.
+--
+-- === Size encoding
+--
+-- This document uses the following "size encoding" of non-negative
+-- integers: From each byte, the seven least significant bits are
+-- used to form the resulting integer. As long as the most significant
+-- bit is 1, this process continues; the byte with MSB 0 provides the
+-- last seven bits.  The seven-bit chunks are concatenated. Later
+-- values are more significant.
+
+objHeaderParser :: Parser RawObjectHeader
+objHeaderParser = do
+    byte <- fromIntegral <$> anyWord8
+    let objectTypeInt = (byte `shiftR` 4) .&. 0x7
+    let maybeObjectType = intToObjectType objectTypeInt
+    let szSoFar = byte .&. 0xf
+    case maybeObjectType of
+        Nothing -> fail $ "Invalid object type: " <> show objectTypeInt
+        Just objType -> do
+            objSize <- if isMsbSet byte then objSizeParser szSoFar 0 else pure szSoFar
+            pure RawObjectHeader{..}
+
+intToObjectType :: Int -> Maybe ObjectType
+intToObjectType 1 = Just OBJ_COMMIT
+intToObjectType 2 = Just OBJ_TREE
+intToObjectType 3 = Just OBJ_BLOB
+intToObjectType 4 = Just OBJ_TAG
+intToObjectType 6 = Just OBJ_OFS_DELTA
+intToObjectType 7 = Just OBJ_REF_DELTA
+intToObjectType _ = Nothing
+
+isMsbSet :: Int {- 8 bit int -} -> Bool
+isMsbSet w = w .&. 0x80 /= 0
+
+objSizeParser :: Int -> Int -> Parser Int
+objSizeParser sizeSoFar iteration = do
+    nextByte <- fromIntegral <$> anyWord8
+    let sizeToAdd = (nextByte .&. 0x7f) `shiftL` (4 + iteration * 7)
+        newSize = sizeSoFar + sizeToAdd
+    if isMsbSet nextByte
+        then objSizeParser newSize (iteration + 1)
+        else pure newSize
