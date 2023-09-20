@@ -1,9 +1,8 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module ZlibDecompression (
-    DecompressionResult (..),
-    DecompressError,
-    decompressPartial,
+    decompressParser,
 ) where
 
 import Codec.Compression.Zlib (defaultDecompressParams)
@@ -14,8 +13,25 @@ import Codec.Compression.Zlib.Internal (
     zlibFormat,
  )
 import Control.Monad.ST.Lazy (ST, runST)
+import Data.Attoparsec.ByteString.Lazy (Parser, takeLazyByteString)
+import Data.Attoparsec.Internal.Types qualified as AIT
 import Data.ByteString.Lazy qualified as BL
 import Prelude hiding (take)
+
+decompressParser :: Parser BL.ByteString
+decompressParser = do
+    everything <- takeLazyByteString
+    case decompressPartial everything of
+        Left err -> fail $ show err
+        Right DecompressionResult{..} -> do
+            let goBack = BL.length unconsumedInput
+            _ <- goBackParser (fromIntegral goBack)
+            pure decompressedData
+
+goBackParser :: Int -> Parser ()
+goBackParser n = AIT.Parser $
+    \t (AIT.Pos pos_) more _lose success ->
+        success t (AIT.Pos $ pos_ - n) more ()
 
 data DecompressionResult = DecompressionResult
     { decompressedData :: BL.ByteString
