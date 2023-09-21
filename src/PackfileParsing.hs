@@ -17,6 +17,7 @@ module PackfileParsing (
     rawObjSHA1,
 ) where
 
+import Control.Arrow ((&&&))
 import Control.Monad (unless, when)
 import Crypto.Hash (Digest, SHA1, hashlazy)
 import Data.Attoparsec.ByteString.Lazy (
@@ -30,6 +31,11 @@ import Data.Attoparsec.ByteString.Lazy (
  )
 import Data.Bits (Bits (popCount), shiftL, shiftR, (.&.), (.|.))
 import Data.ByteString.Lazy qualified as BL
+import Data.ByteString.Lazy.Char8 qualified as BLC
+import Data.Map qualified as Map
+import Data.Maybe (mapMaybe)
+import Data.Sequence (Seq (..))
+import Data.Sequence qualified as Seq
 import Data.Word8 (Word8)
 import ParsingUtils (sha1Parser)
 import ZlibDecompression (decompressParser)
@@ -89,6 +95,14 @@ data RawObject
     | RawDeltified RawDeltifiedObject
     deriving (Show)
 
+getDeltified :: RawObject -> Maybe RawDeltifiedObject
+getDeltified (RawDeltified x) = Just x
+getDeltified _ = Nothing
+
+getUndeltified :: RawObject -> Maybe RawUndeltifiedObject
+getUndeltified (RawUndeltified x) = Just x
+getUndeltified _ = Nothing
+
 data RawUndeltifiedObject = RawUndeltifiedObject
     { objHeader :: RawObjectHeader
     , objData :: BL.ByteString
@@ -96,7 +110,10 @@ data RawUndeltifiedObject = RawUndeltifiedObject
     deriving (Show, Eq)
 
 rawObjSHA1 :: RawUndeltifiedObject -> Digest SHA1
-rawObjSHA1 = hashlazy . objData
+rawObjSHA1 = hashlazy . objContent
+
+objContent :: RawUndeltifiedObject -> BL.ByteString
+objContent RawUndeltifiedObject{..} = objHeaderRepr objHeader <> "\0" <> objData
 
 data RawDeltifiedObject = RawDeltifiedObject
     { deltaObjHeader :: RawObjectHeader
@@ -119,6 +136,9 @@ data RawObjectHeader = RawObjectHeader
     }
     deriving (Show, Eq)
 
+objHeaderRepr :: RawObjectHeader -> BL.ByteString
+objHeaderRepr RawObjectHeader{..} = BLC.pack $ objTypeRepr objType <> " " <> show objSize
+
 data ObjectType
     = OBJ_COMMIT
     | OBJ_TREE
@@ -127,6 +147,13 @@ data ObjectType
     | OBJ_OFS_DELTA
     | OBJ_REF_DELTA
     deriving (Show, Eq)
+
+objTypeRepr :: ObjectType -> String
+objTypeRepr OBJ_COMMIT = "commit"
+objTypeRepr OBJ_TREE = "tree"
+objTypeRepr OBJ_BLOB = "blob"
+objTypeRepr OBJ_TAG = "tag"
+objTypeRepr _ = error "Has no representation"
 
 -- Packfile Parsing
 
@@ -141,7 +168,7 @@ packfileParser = do
     receivedChecksum <- sha1Parser <* endOfInput
     pure PackfileWithDeltas{..}
 
-parsePackfile :: BL.ByteString -> Either String PackfileWithDeltas
+parsePackfile :: BL.ByteString -> Either String [RawUndeltifiedObject]
 parsePackfile input = do
     packfile <- parseOnly packfileParser input
     let inputWithoutChecksum = BL.dropEnd 20 input
@@ -149,7 +176,7 @@ parsePackfile input = do
         rcvdChecksum = receivedChecksum packfile
     unless (rcvdChecksum == computedChecksum) $
         Left ("Checksum Mismatch: Expected: " <> show rcvdChecksum <> ", Got: " <> show computedChecksum)
-    pure packfile
+    reconstructDeltaObjects $ packfileObjects packfile
 
 -- Packfile Header Parsing
 
@@ -396,7 +423,7 @@ reconstructDeltaFromBase baseObject deltaObject = do
             foldl (applyInstruction (objData baseObject)) "" instructions
     pure $
         RawUndeltifiedObject
-            (RawObjectHeader (objType . objHeader $ baseObject) reconstructedObjSize)
+            (RawObjectHeader (objType . objHeader $ baseObject) (fromIntegral $ BL.length reconstructedObjContent))
             reconstructedObjContent
 
 applyInstruction :: BL.ByteString -> BL.ByteString -> Instruction -> BL.ByteString
@@ -404,3 +431,24 @@ applyInstruction base obj (Copy offset size) =
     obj <> BL.take (fromIntegral size) (BL.drop (fromIntegral offset) base)
 applyInstruction _ obj (AddNew dataToAppend) =
     obj <> dataToAppend
+
+reconstructDeltaObjects :: [RawObject] -> Either String [RawUndeltifiedObject]
+reconstructDeltaObjects rawObjects =
+    Map.elems <$> reconstructGitObjects baseObjectsMap objectsToReconstruct
+  where
+    baseObjectsMap =
+        Map.fromList $ map (rawObjSHA1 &&& id) $ mapMaybe getUndeltified rawObjects
+    objectsToReconstruct = Seq.fromList $ mapMaybe getDeltified rawObjects
+
+reconstructGitObjects ::
+    Map.Map (Digest SHA1) RawUndeltifiedObject ->
+    Seq.Seq RawDeltifiedObject ->
+    Either String (Map.Map (Digest SHA1) RawUndeltifiedObject)
+reconstructGitObjects baseObjects Seq.Empty = pure baseObjects
+reconstructGitObjects baseObjects (deltaObj :<| rest) =
+    case Map.lookup (parentSha1 deltaObj) baseObjects of
+        Nothing -> reconstructGitObjects baseObjects (rest :|> deltaObj)
+        Just baseOject -> do
+            reconstructedObj <- reconstructDeltaFromBase baseOject deltaObj
+            let baseObjects' = Map.insert (rawObjSHA1 reconstructedObj) reconstructedObj baseObjects
+            reconstructGitObjects baseObjects' rest

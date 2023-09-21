@@ -47,6 +47,7 @@ library
     , attoparsec
     , base
     , bytestring
+    , containers
     , cryptonite
     , directory
     , filepath

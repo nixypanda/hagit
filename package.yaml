@@ -38,6 +38,7 @@ library:
   dependencies:
     - base
     - bytestring
+    - containers
     - cryptonite
     - directory
     - filepath
