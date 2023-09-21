@@ -2,6 +2,7 @@ import HTTPSmartCommandTests (commandTests)
 import HTTPSmartParseTests (smartParserTests)
 import ObjectParseTests (parserTests)
 import ObjectTests (objectTests)
+import PackfileTests (packfileTests)
 import PktLineParseTests (pktLineParserTests)
 import PktLineTests (pktLineTests)
 import Test.HUnit
@@ -15,6 +16,7 @@ tests =
             <> pktLineTests
             <> commandTests
             <> smartParserTests
+            <> packfileTests
 
 main :: IO ()
 main = do

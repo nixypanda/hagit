@@ -2,7 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module PackfileParsing (parsePackfile) where
+module PackfileParsing (
+    parsePackfile,
+    instructionParser,
+    Instruction (..),
+    DeltaContent (..),
+    deltaContentParser,
+) where
 
 import Control.Monad (unless, when)
 import Crypto.Hash (Digest, SHA1, hashlazy)
@@ -11,11 +17,13 @@ import Data.Attoparsec.ByteString.Lazy (
     anyWord8,
     count,
     endOfInput,
+    many',
     parseOnly,
     take,
  )
-import Data.Bits (shiftL, shiftR, (.&.), (.|.))
+import Data.Bits (Bits (popCount), shiftL, shiftR, (.&.), (.|.))
 import Data.ByteString.Lazy qualified as BL
+import Data.Word8 (Word8)
 import ParsingUtils (sha1Parser)
 import ZlibDecompression (decompressParser)
 import Prelude hiding (take)
@@ -233,3 +241,73 @@ objSizeParser sizeSoFar iteration = do
     if isMsbSet nextByte
         then objSizeParser newSize (iteration + 1)
         else pure newSize
+
+-- Packfile Reconstruction: Parsing Deltafied Objcet to Instructions
+
+data InstructionType = CopyType | AddNewType deriving (Show, Eq)
+
+instructionType :: Word8 -> InstructionType
+instructionType firstByte
+    | firstByte .&. 0x80 == 0 = AddNewType
+    | otherwise = CopyType
+
+data Instruction
+    = Copy Int Int
+    | AddNew BL.ByteString
+    deriving (Show, Eq)
+
+data DeltaContent = DeltaContent
+    { baseObjSize :: Int
+    , reconstructedObjSize :: Int
+    , instructions :: [Instruction]
+    }
+    deriving (Show, Eq)
+
+deltaContentParser :: Parser DeltaContent
+deltaContentParser = do
+    baseObjSize <- deltaHeaderObjSizeParser 0 0
+    reconstructedObjSize <- deltaHeaderObjSizeParser 0 0
+    instructions <- many' instructionParser
+    pure $ DeltaContent baseObjSize reconstructedObjSize instructions
+
+deltaHeaderObjSizeParser :: Int -> Int -> Parser Int
+deltaHeaderObjSizeParser sizeSoFar iteration = do
+    nextByte <- fromIntegral <$> anyWord8
+    let sizeToAdd = (nextByte .&. 0x7f) `shiftL` (iteration * 7)
+        newSize = sizeSoFar + sizeToAdd
+    if isMsbSet nextByte
+        then objSizeParser newSize (iteration + 1)
+        else pure newSize
+
+instructionParser :: Parser Instruction
+instructionParser = do
+    firstByte <- anyWord8
+    case instructionType firstByte of
+        CopyType -> copyInstructionParser firstByte
+        AddNewType -> addInstructionParser firstByte
+
+addInstructionParser :: Word8 -> Parser Instruction
+addInstructionParser firstByte = do
+    let dataSize = fromIntegral $ firstByte .&. 0x7f
+    dataToAppend <- take dataSize
+    pure $ AddNew $ BL.fromStrict dataToAppend
+
+copyInstructionParser :: Word8 -> Parser Instruction
+copyInstructionParser firstByte = do
+    offsets <- count numOffsets anyWord8
+    sizes <- count numSizes anyWord8
+    let offset = convertToInt hasOffset 0 0 0 4 offsets
+    let size = convertToInt hasSize 0 0 0 3 sizes
+    pure $ Copy offset size
+  where
+    hasOffset i = firstByte .&. (1 `shiftL` i) /= 0
+    hasSize i = firstByte .&. (1 `shiftL` (i + 4)) /= 0
+    numOffsets = popCount $ firstByte .&. 0xf
+    numSizes = popCount $ firstByte .&. 0x70
+
+convertToInt :: (Int -> Bool) -> Int -> Int -> Int -> Int -> [Word8] -> Int
+convertToInt _ offset _ _ _ [] = offset
+convertToInt hasOffset offset offsetShift i maxI (o : offsets)
+    | i == maxI = offset
+    | hasOffset i = convertToInt hasOffset (offset + fromIntegral o `shiftL` offsetShift) (offsetShift + 8) (i + 1) maxI offsets
+    | otherwise = convertToInt hasOffset offset (offsetShift + 8) (i + 1) maxI (o : offsets)
