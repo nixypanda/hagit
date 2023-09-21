@@ -4,10 +4,17 @@
 
 module PackfileParsing (
     parsePackfile,
+    -- exports for testing
     instructionParser,
     Instruction (..),
     DeltaContent (..),
     deltaContentParser,
+    reconstructDeltaFromBase,
+    RawUndeltifiedObject (..),
+    RawDeltifiedObject (..),
+    RawObjectHeader (..),
+    ObjectType (..),
+    rawObjSHA1,
 ) where
 
 import Control.Monad (unless, when)
@@ -86,7 +93,10 @@ data RawUndeltifiedObject = RawUndeltifiedObject
     { objHeader :: RawObjectHeader
     , objData :: BL.ByteString
     }
-    deriving (Show)
+    deriving (Show, Eq)
+
+rawObjSHA1 :: RawUndeltifiedObject -> Digest SHA1
+rawObjSHA1 = hashlazy . objData
 
 data RawDeltifiedObject = RawDeltifiedObject
     { deltaObjHeader :: RawObjectHeader
@@ -107,7 +117,7 @@ data RawObjectHeader = RawObjectHeader
     { objType :: ObjectType
     , objSize :: Int
     }
-    deriving (Show)
+    deriving (Show, Eq)
 
 data ObjectType
     = OBJ_COMMIT
@@ -116,7 +126,7 @@ data ObjectType
     | OBJ_TAG
     | OBJ_OFS_DELTA
     | OBJ_REF_DELTA
-    deriving (Show)
+    deriving (Show, Eq)
 
 -- Packfile Parsing
 
@@ -311,3 +321,15 @@ convertToInt hasOffset offset offsetShift i maxI (o : offsets)
     | i == maxI = offset
     | hasOffset i = convertToInt hasOffset (offset + fromIntegral o `shiftL` offsetShift) (offsetShift + 8) (i + 1) maxI offsets
     | otherwise = convertToInt hasOffset offset (offsetShift + 8) (i + 1) maxI (o : offsets)
+
+-- Packfile Reconstruction: Applying Instructions to Deltafied Objects
+
+reconstructDeltaFromBase :: RawUndeltifiedObject -> RawDeltifiedObject -> Either String RawUndeltifiedObject
+reconstructDeltaFromBase baseObject deltaObject = do
+    DeltaContent{..} <- parseOnly deltaContentParser (deltaObjData deltaObject)
+    let reconstructedObjContent = foldl (applyInstruction (objData baseObject)) "" instructions
+    pure $ RawUndeltifiedObject (RawObjectHeader (objType . objHeader $ baseObject) reconstructedObjSize) reconstructedObjContent
+
+applyInstruction :: BL.ByteString -> BL.ByteString -> Instruction -> BL.ByteString
+applyInstruction base obj (Copy offset size) = obj <> BL.take (fromIntegral size) (BL.drop (fromIntegral offset) base)
+applyInstruction _ obj (AddNew dataToAppend) = obj <> dataToAppend

@@ -3,7 +3,18 @@
 module PackfileTests (packfileTests) where
 
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
-import PackfileParsing (DeltaContent (..), Instruction (..), deltaContentParser, instructionParser)
+import PackfileParsing (
+    DeltaContent (..),
+    Instruction (..),
+    ObjectType (..),
+    RawDeltifiedObject (..),
+    RawObjectHeader (..),
+    RawUndeltifiedObject (..),
+    deltaContentParser,
+    instructionParser,
+    rawObjSHA1,
+    reconstructDeltaFromBase,
+ )
 import Test.HUnit
 
 testCopyInstructionParsing :: [Test]
@@ -49,5 +60,15 @@ testDetafiedObjectToInstructions =
             (Right $ DeltaContent 23 31 [Copy 0 20, AddNew " dumb bitch"])
             (parseOnly deltaContentParser "\x17\x1f\x90\x14\x0b dumb bitch")
 
+testReconstructDeltaFromBase :: Test
+testReconstructDeltaFromBase =
+    let baseObject = RawUndeltifiedObject (RawObjectHeader OBJ_BLOB 23) "hey there I am a badass"
+        deltaObject = RawDeltifiedObject (RawObjectHeader OBJ_REF_DELTA 16) "\x17\x1f\x90\x14\x0b dumb bitch" (rawObjSHA1 baseObject)
+     in TestCase $
+            assertEqual
+                "reconstruct delta from base"
+                (Right $ RawUndeltifiedObject (RawObjectHeader OBJ_BLOB 31) "hey there I am a bad dumb bitch")
+                (reconstructDeltaFromBase baseObject deltaObject)
+
 packfileTests :: [Test]
-packfileTests = testCopyInstructionParsing <> [testAddNewInstructionParsing, testDetafiedObjectToInstructions]
+packfileTests = testCopyInstructionParsing <> [testAddNewInstructionParsing, testDetafiedObjectToInstructions, testReconstructDeltaFromBase]
