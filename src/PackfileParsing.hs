@@ -252,6 +252,66 @@ objSizeParser sizeSoFar iteration = do
         then objSizeParser newSize (iteration + 1)
         else pure newSize
 
+-- === Deltified representation
+--
+-- Both ofs-delta and ref-delta store the "delta" to be applied to
+-- another object (called 'base object') to reconstruct the object. The
+-- difference between them is, ref-delta directly encodes base object
+-- name. If the base object is in the same pack, ofs-delta encodes
+-- the offset of the base object in the pack instead.
+--
+-- The delta data starts with the size of the base object and the
+-- size of the object to be reconstructed. These sizes are
+-- encoded using the size encoding from above.  The remainder of
+-- the delta data is a sequence of instructions to reconstruct the object
+-- from the base object. If the base object is deltified, it must be
+-- converted to canonical form first. Each instruction appends more and
+-- more data to the target object until it's complete. There are two
+-- supported instructions so far: one for copy a byte range from the
+-- source object and one for inserting new data embedded in the
+-- instruction itself.
+--
+-- ==== Instruction to copy from base object
+--
+--   +----------+---------+---------+---------+---------+-------+-------+-------+
+--   | 1xxxxxxx | offset1 | offset2 | offset3 | offset4 | size1 | size2 | size3 |
+--   +----------+---------+---------+---------+---------+-------+-------+-------+
+--
+-- This is the instruction format to copy a byte range from the source
+-- object. It encodes the offset to copy from and the number of bytes to
+-- copy. Offset and size are in little-endian order.
+--
+-- All offset and size bytes are optional. This is to reduce the
+-- instruction size when encoding small offsets or sizes. The first seven
+-- bits in the first octet determines which of the next seven octets is
+-- present. If bit zero is set, offset1 is present. If bit one is set
+-- offset2 is present and so on.
+--
+-- Note that a more compact instruction does not change offset and size
+-- encoding. For example, if only offset2 is omitted like below, offset3
+-- still contains bits 16-23. It does not become offset2 and contains
+-- bits 8-15 even if it's right next to offset1.
+--
+--   +----------+---------+---------+
+--   | 10000101 | offset1 | offset3 |
+--   +----------+---------+---------+
+--
+-- In its most compact form, this instruction only takes up one byte
+-- (0x80) with both offset and size omitted, which will have default
+-- values zero. There is another exception: size zero is automatically
+-- converted to 0x10000.
+--
+-- ==== Instruction to add new data
+--
+--   +----------+============+
+--   | 0xxxxxxx |    data    |
+--   +----------+============+
+--
+-- This is the instruction to construct target object without the base
+-- object. The following data is appended to the target object. The first
+-- seven bits of the first octet determines the size of data in
+-- bytes. The size must be non-zero.
+
 -- Packfile Reconstruction: Parsing Deltafied Objcet to Instructions
 
 data InstructionType = CopyType | AddNewType deriving (Show, Eq)
@@ -317,19 +377,30 @@ copyInstructionParser firstByte = do
 
 convertToInt :: (Int -> Bool) -> Int -> Int -> Int -> Int -> [Word8] -> Int
 convertToInt _ offset _ _ _ [] = offset
-convertToInt hasOffset offset offsetShift i maxI (o : offsets)
-    | i == maxI = offset
-    | hasOffset i = convertToInt hasOffset (offset + fromIntegral o `shiftL` offsetShift) (offsetShift + 8) (i + 1) maxI offsets
-    | otherwise = convertToInt hasOffset offset (offsetShift + 8) (i + 1) maxI (o : offsets)
+convertToInt isPresent val shift i maxI (b : bytes)
+    | i == maxI = val
+    | isPresent i = convertToInt isPresent newVal (shift + 8) (i + 1) maxI bytes
+    | otherwise = convertToInt isPresent val (shift + 8) (i + 1) maxI (b : bytes)
+  where
+    newVal = val + fromIntegral b `shiftL` shift
 
 -- Packfile Reconstruction: Applying Instructions to Deltafied Objects
 
-reconstructDeltaFromBase :: RawUndeltifiedObject -> RawDeltifiedObject -> Either String RawUndeltifiedObject
+reconstructDeltaFromBase ::
+    RawUndeltifiedObject ->
+    RawDeltifiedObject ->
+    Either String RawUndeltifiedObject
 reconstructDeltaFromBase baseObject deltaObject = do
     DeltaContent{..} <- parseOnly deltaContentParser (deltaObjData deltaObject)
-    let reconstructedObjContent = foldl (applyInstruction (objData baseObject)) "" instructions
-    pure $ RawUndeltifiedObject (RawObjectHeader (objType . objHeader $ baseObject) reconstructedObjSize) reconstructedObjContent
+    let reconstructedObjContent =
+            foldl (applyInstruction (objData baseObject)) "" instructions
+    pure $
+        RawUndeltifiedObject
+            (RawObjectHeader (objType . objHeader $ baseObject) reconstructedObjSize)
+            reconstructedObjContent
 
 applyInstruction :: BL.ByteString -> BL.ByteString -> Instruction -> BL.ByteString
-applyInstruction base obj (Copy offset size) = obj <> BL.take (fromIntegral size) (BL.drop (fromIntegral offset) base)
-applyInstruction _ obj (AddNew dataToAppend) = obj <> dataToAppend
+applyInstruction base obj (Copy offset size) =
+    obj <> BL.take (fromIntegral size) (BL.drop (fromIntegral offset) base)
+applyInstruction _ obj (AddNew dataToAppend) =
+    obj <> dataToAppend
