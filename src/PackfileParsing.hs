@@ -5,16 +5,17 @@
 module PackfileParsing (
     parsePackfile,
     -- exports for testing
-    instructionParser,
     Instruction (..),
     DeltaContent (..),
-    deltaContentParser,
-    reconstructDeltaFromBase,
     RawUndeltifiedObject (..),
     RawDeltifiedObject (..),
     RawObjectHeader (..),
     ObjectType (..),
+    instructionParser,
     rawObjSHA1,
+    deltaContentParser,
+    deltaHeaderObjSizeParser,
+    reconstructDeltaFromBase,
 ) where
 
 import Control.Arrow ((&&&))
@@ -362,19 +363,22 @@ data DeltaContent = DeltaContent
 
 deltaContentParser :: Parser DeltaContent
 deltaContentParser = do
-    baseObjSize <- deltaHeaderObjSizeParser 0 0
-    reconstructedObjSize <- deltaHeaderObjSizeParser 0 0
+    baseObjSize <- deltaHeaderObjSizeParser
+    reconstructedObjSize <- deltaHeaderObjSizeParser
     instructions <- many' instructionParser
     pure $ DeltaContent baseObjSize reconstructedObjSize instructions
 
-deltaHeaderObjSizeParser :: Int -> Int -> Parser Int
-deltaHeaderObjSizeParser sizeSoFar iteration = do
-    nextByte <- fromIntegral <$> anyWord8
-    let sizeToAdd = (nextByte .&. 0x7f) `shiftL` (iteration * 7)
-        newSize = sizeSoFar + sizeToAdd
-    if isMsbSet nextByte
-        then objSizeParser newSize (iteration + 1)
-        else pure newSize
+deltaHeaderObjSizeParser :: Parser Int
+deltaHeaderObjSizeParser = deltaHeaderObjSizeParser' 0 0
+  where
+    deltaHeaderObjSizeParser' :: Int -> Int -> Parser Int
+    deltaHeaderObjSizeParser' sizeSoFar iteration = do
+        nextByte <- fromIntegral <$> anyWord8
+        let sizeToAdd = (nextByte .&. 0x7f) `shiftL` (iteration * 7)
+            newSize = sizeSoFar + sizeToAdd
+        if isMsbSet nextByte
+            then deltaHeaderObjSizeParser' newSize (iteration + 1)
+            else pure newSize
 
 instructionParser :: Parser Instruction
 instructionParser = do

@@ -1,8 +1,10 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module PackfileTests (packfileTests) where
 
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
+import Data.ByteString.Lazy qualified as BL
 import PackfileParsing (
     DeltaContent (..),
     Instruction (..),
@@ -11,6 +13,7 @@ import PackfileParsing (
     RawObjectHeader (..),
     RawUndeltifiedObject (..),
     deltaContentParser,
+    deltaHeaderObjSizeParser,
     instructionParser,
     rawObjSHA1,
     reconstructDeltaFromBase,
@@ -62,13 +65,49 @@ testDetafiedObjectToInstructions =
 
 testReconstructDeltaFromBase :: Test
 testReconstructDeltaFromBase =
-    let baseObject = RawUndeltifiedObject (RawObjectHeader OBJ_BLOB 23) "hey there I am a badass"
-        deltaObject = RawDeltifiedObject (RawObjectHeader OBJ_REF_DELTA 16) "\x17\x1f\x90\x14\x0b dumb bitch" (rawObjSHA1 baseObject)
+    let baseObject =
+            RawUndeltifiedObject (RawObjectHeader OBJ_BLOB 23) "hey there I am a badass"
+        deltaObject =
+            RawDeltifiedObject
+                (RawObjectHeader OBJ_REF_DELTA 16)
+                "\x17\x1f\x90\x14\x0b dumb bitch"
+                (rawObjSHA1 baseObject)
      in TestCase $
             assertEqual
                 "reconstruct delta from base"
-                (Right $ RawUndeltifiedObject (RawObjectHeader OBJ_BLOB 31) "hey there I am a bad dumb bitch")
+                ( Right $
+                    RawUndeltifiedObject
+                        (RawObjectHeader OBJ_BLOB 31)
+                        "hey there I am a bad dumb bitch"
+                )
                 (reconstructDeltaFromBase baseObject deltaObject)
 
+testDeltaObjHeaderSizeParser :: [Test]
+testDeltaObjHeaderSizeParser =
+    let
+        testData =
+            [ ("\x05", 5)
+            , ("\x00", 0)
+            , ("\x87\x05", 647)
+            , ("\x7f\x81\x05", 127)
+            , ("\x80\x01", 128)
+            , ("\x84\x08", 1028)
+            ]
+        testFunc :: Int -> (BL.ByteString, Int) -> Test
+        testFunc i (x, y) =
+            TestCase $
+                assertEqual
+                    ("delta obj header size parser: " <> show i)
+                    (Right y)
+                    (parseOnly deltaHeaderObjSizeParser x)
+     in
+        zipWith testFunc [1 ..] testData
+
 packfileTests :: [Test]
-packfileTests = testCopyInstructionParsing <> [testAddNewInstructionParsing, testDetafiedObjectToInstructions, testReconstructDeltaFromBase]
+packfileTests =
+    testCopyInstructionParsing
+        <> [ testAddNewInstructionParsing
+           , testDetafiedObjectToInstructions
+           , testReconstructDeltaFromBase
+           ]
+        <> testDeltaObjHeaderSizeParser
