@@ -89,8 +89,23 @@ treeParserTest =
                 (gitContentToObject input)
             )
 
+blobParserTest :: Test
+blobParserTest =
+    let
+        input = "blob 4\0hell"
+     in
+        TestCase
+            ( assertEqual
+                "blobParser parser a blob entry properly"
+                (Right $ Blob "hell")
+                (gitContentToObject input)
+            )
+
 treeEntryParserTests :: [Test]
 treeEntryParserTests = [treeEntryParserTestBasic]
 
+gitObjectParsingTests :: [Test]
+gitObjectParsingTests = [blobParserTest, treeParserTest]
+
 parserTests :: [Test]
-parserTests = treeEntryParserTests <> [treeParserTest] <> [sha1ParserTest]
+parserTests = treeEntryParserTests <> gitObjectParsingTests <> [sha1ParserTest]
