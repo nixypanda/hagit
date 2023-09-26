@@ -143,9 +143,9 @@ objectParser = do
     rawObj <- case packObjType rawObjHeader of
         OBJ_OFS_DELTA -> fail $ "Unsupported object type: " <> show OBJ_OFS_DELTA
         OBJ_REF_DELTA -> mkDeltifiedObj rawObjHeader <$> sha1Parser <*> decompressParser
-        OBJ_BLOB -> gitObjParser (Undeltafied <$> blobParser' expectedSize)
-        OBJ_TREE -> gitObjParser (Undeltafied <$> treeParser')
-        OBJ_COMMIT -> gitObjParser (Undeltafied <$> commitParser')
+        OBJ_BLOB -> gitObjParser (Undeltafied . Blob <$> blobParser' expectedSize)
+        OBJ_TREE -> gitObjParser (Undeltafied . Tree <$> treeParser')
+        OBJ_COMMIT -> gitObjParser (Undeltafied . Commit <$> commitParser')
         OBJ_TAG -> fail $ "Unsupported object type: " <> show OBJ_TAG
 
     let actualSize = packObjLen rawObj

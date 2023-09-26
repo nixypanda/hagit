@@ -45,15 +45,15 @@ import Object (CommitInner (..), Contributor (..), GitObject (..), TreeEntry (..
 import ParsingUtils (ParseError, sha1Parser, sha1StrParser)
 import Prelude hiding (take, takeWhile)
 
-gitBlobParser :: Parser GitObject
+gitBlobParser :: Parser BL.ByteString
 gitBlobParser = do
     _ <- string "blob "
     len <- decimal
     _ <- char '\0'
     blobParser' len
 
-blobParser' :: Int -> Parser GitObject
-blobParser' n = Blob . BL.fromStrict <$> take n
+blobParser' :: Int -> Parser BL.ByteString
+blobParser' n = BL.fromStrict <$> take n
 
 treeEntryParser :: Parser TreeEntry
 treeEntryParser = do
@@ -63,24 +63,24 @@ treeEntryParser = do
     entrySha1 <- sha1Parser
     pure TreeEntry{..}
 
-treeParser :: Parser GitObject
+treeParser :: Parser [TreeEntry]
 treeParser = do
     _ <- string "tree "
     _ <- many1 digit
     _ <- char '\0'
     treeParser'
 
-treeParser' :: Parser GitObject
-treeParser' = Tree <$> many' treeEntryParser
+treeParser' :: Parser [TreeEntry]
+treeParser' = many' treeEntryParser
 
-commitParser :: Parser GitObject
+commitParser :: Parser CommitInner
 commitParser = do
     _ <- string "commit "
     _ <- many1 digit
     _ <- char '\0'
     commitParser'
 
-commitParser' :: Parser GitObject
+commitParser' :: Parser CommitInner
 commitParser' = do
     treeSha1 <- parseSha1Header "tree"
     _ <- char '\n'
@@ -89,7 +89,7 @@ commitParser' = do
     commitCommitter <- parseContributor "committer"
     _ <- char '\n'
     commitMessage <- BLC.pack <$> many' anyChar
-    return $ Commit CommitInner{..}
+    return $ CommitInner{..}
   where
     parseSha1Header headerName = string headerName *> char ' ' *> sha1StrParser
     parseContributor name = do
@@ -107,7 +107,10 @@ commitParser' = do
             Nothing -> fail $ "InvalidTimestamp: " <> inputStr
 
 gitObjectParser :: Parser GitObject
-gitObjectParser = treeParser <|> gitBlobParser <|> commitParser
+gitObjectParser =
+    (Tree <$> treeParser)
+        <|> (Blob <$> gitBlobParser)
+        <|> (Commit <$> commitParser)
 
 gitContentToObject :: BL.ByteString -> Either ParseError GitObject
 gitContentToObject = parseOnly gitObjectParser
