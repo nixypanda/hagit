@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -17,18 +18,19 @@ module Lib (
 ) where
 
 import Codec.Compression.Zlib (decompress)
-import Control.Monad (forM, unless)
+import Control.Monad (forM, forM_, unless)
 import Control.Monad.Except (ExceptT, MonadError, liftEither, throwError, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.Hash (Digest, SHA1)
+import Data.Attoparsec.ByteString.Lazy (parseOnly)
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy qualified as BL
 import Data.ByteString.Lazy.Char8 qualified as BLC
-import Data.Either (fromRight)
 import Data.List (sort)
 import Data.Maybe (fromMaybe)
-import Data.Time (getCurrentTime)
+import Data.Time (getZonedTime)
 import HTTPSmart (HttpSmartError, discoverGitServerCapabilities, fetch, lsRefs)
+import HTTPSmartCommand (Ref (..))
 import Object (
     GitObject (..),
     ObjectType (..),
@@ -40,16 +42,23 @@ import Object (
     fileMode,
     objBody,
     objCompressedContent,
+    objContent,
     objSha1,
     objSha1Str,
     objType,
+    treeSha1,
  )
-import ObjectParse (gitContentToObject)
+import ObjectParse (blobParser, commitParser, gitContentToObject, treeParser)
 import PackfileParsing (parsePackfile)
 import ParsingUtils (ParseError, parseSHA1Str)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, listDirectory)
+import System.Directory (
+    createDirectoryIfMissing,
+    doesDirectoryExist,
+    listDirectory,
+    setCurrentDirectory,
+ )
 import System.FilePath (takeBaseName, (</>))
-import System.IO (IOMode (..), hPutStrLn, withBinaryFile, withFile)
+import System.IO (IOMode (..), hPutStrLn, withFile)
 import System.IO.Error (tryIOError)
 import Utils (liftIOEither)
 
@@ -65,6 +74,7 @@ data Command
 data GitError
     = InvalidSHA1 ParseError
     | GitContentParseError ParseError
+    | PackfileParseError ParseError
     | UnexpectedObjectError ObjectType ObjectType
     | HttpSmartErr HttpSmartError
     | ServerCapabilitiesMismatch [BL.ByteString] [BL.ByteString]
@@ -76,7 +86,7 @@ newtype GitM a = GitM {runGitM :: ExceptT GitError IO a}
     deriving (Functor, Applicative, Monad, MonadIO, MonadError GitError)
 
 gitLocation :: FilePath
-gitLocation = "git_test"
+gitLocation = ".git"
 
 -- Main runner
 
@@ -196,7 +206,7 @@ commitTree CommitTreeOpts{..} = do
             pure $ Just pSha1'
     let msg = commitMessageOpt
     let author = fromMaybe defaultAuthor commitAuthorOpt
-    now <- liftIO getCurrentTime
+    now <- liftIO getZonedTime
     let commit = createCommitObject treeSha1 parentSha1 author msg now
     writeObject commit
     liftIO $ print $ objSha1Str commit
@@ -208,10 +218,9 @@ data CloneRepoOpts = CloneRepoOpts
 
 cloneRepo :: CloneRepoOpts -> GitM ()
 cloneRepo CloneRepoOpts{..} = do
-    -- Remove these two lines
-    liftIO cloneTest
-    _ <- throwError DevTest
-
+    liftIO $ createDirectoryIfMissing True repoLocalPath
+    liftIO $ setCurrentDirectory repoLocalPath
+    initialize
     let expectedCapabilities = ["version 2", "object-format=sha1"]
     capabilities <-
         liftIOEither
@@ -220,14 +229,38 @@ cloneRepo CloneRepoOpts{..} = do
         throwError $
             ServerCapabilitiesMismatch expectedCapabilities capabilities
     refs <- liftIOEither $ first HttpSmartErr <$> lsRefs repoUrlHTTPS
-    packfile <- liftIO $ fetch repoUrlHTTPS refs
-    liftIO $ BL.putStr (fromRight "" packfile)
+    liftIO $ print refs
+    packfile <- liftIOEither $ first HttpSmartErr <$> fetch repoUrlHTTPS refs
+    gitObjects <- liftEither $ first PackfileParseError $ parsePackfile packfile
+    forM_ gitObjects writeObject
+    let headSha1 = getHead refs
+    liftIO $ print headSha1
+    headCommitStr <- readContentFromSHA1Code headSha1
+    headCommit <-
+        liftEither $ first GitContentParseError $ parseOnly commitParser headCommitStr
+    let headTree = treeSha1 headCommit
+    checkoutTreeAt headTree ""
 
-cloneTest :: IO ()
-cloneTest = do
-    withBinaryFile "git-sample-1.pack" ReadMode $ \handle -> do
-        content <- BL.hGetContents handle
-        print $ parsePackfile content
+checkoutTreeAt :: Digest SHA1 -> FilePath -> GitM ()
+checkoutTreeAt sha1 path = do
+    treeContents <- readContentFromSHA1Code sha1
+    treeObjectEntries <-
+        liftEither $ first GitContentParseError $ parseOnly treeParser treeContents
+    forM_ treeObjectEntries $ \treeEntry -> do
+        let filePath = path </> entryNameStr treeEntry
+        if
+                | entryMode treeEntry == fileMode -> do
+                    blobContents <- readContentFromSHA1Code (entrySha1 treeEntry)
+                    blob <-
+                        liftEither $
+                            first GitContentParseError $
+                                parseOnly blobParser blobContents
+                    liftIO $ BL.writeFile filePath (objContent $ Blob blob)
+                | entryMode treeEntry == dirMode -> do
+                    liftIO $ createDirectoryIfMissing True filePath
+                    checkoutTreeAt (entrySha1 treeEntry) filePath
+                | otherwise ->
+                    throwError $ GitContentParseError "not a file or directory"
 
 -- Helpers
 
@@ -262,3 +295,6 @@ gitContentToObject' = liftEither . first GitContentParseError . gitContentToObje
 -- SHA-1 to directory and filename
 sha1ToDirAndFilename :: Digest SHA1 -> (String, String)
 sha1ToDirAndFilename = splitAt 2 . show
+
+getHead :: [Ref] -> Digest SHA1
+getHead = refSha1 . head . filter ((== "HEAD") . refName)

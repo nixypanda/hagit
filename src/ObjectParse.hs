@@ -6,6 +6,8 @@
 module ObjectParse (
     gitContentToObject,
     commitParser,
+    treeParser,
+    blobParser,
     -- Packfile Parsing Requirements
     commitParser',
     treeParser',
@@ -45,8 +47,8 @@ import Object (CommitInner (..), Contributor (..), GitObject (..), TreeEntry (..
 import ParsingUtils (ParseError, sha1Parser, sha1StrParser)
 import Prelude hiding (take, takeWhile)
 
-gitBlobParser :: Parser BL.ByteString
-gitBlobParser = do
+blobParser :: Parser BL.ByteString
+blobParser = do
     _ <- string "blob "
     len <- decimal
     _ <- char '\0'
@@ -109,7 +111,7 @@ commitParser' = do
 gitObjectParser :: Parser GitObject
 gitObjectParser =
     (Tree <$> treeParser)
-        <|> (Blob <$> gitBlobParser)
+        <|> (Blob <$> blobParser)
         <|> (Commit <$> commitParser)
 
 gitContentToObject :: BL.ByteString -> Either ParseError GitObject
