@@ -37,18 +37,21 @@ library:
   source-dirs: src
   dependencies:
     - base
-    - binary
-    - byteable
     - bytestring
+    - containers
     - cryptonite
     - directory
     - filepath
+    - http-client
+    - http-client-tls
+    - http-types
     - memory
     - mtl
-    - parsec
+    - attoparsec
     - time
-    - utf8-string
+    - word8
     - zlib
+    - HUnit
 
 executables:
   hagit-exe:
@@ -75,7 +78,8 @@ tests:
     dependencies:
       - hagit
       - HUnit
-      - parsec
+      - attoparsec
       - cryptonite
       - bytestring
+      - time
       - zlib

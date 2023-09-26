@@ -24,6 +24,7 @@ import Options.Applicative.Types (Parser)
 
 import Lib (
     CatFileOpts (..),
+    CloneRepoOpts (..),
     Command (..),
     CommitTreeOpts (..),
     HashObjOpts (..),
@@ -62,6 +63,9 @@ commands =
             <> command
                 "commit-tree"
                 (info (CommitTree <$> commitTreeParser) (progDesc "Commit a tree"))
+            <> command
+                "clone"
+                (info (CloneRepo <$> cloneRepoParser) (progDesc "Clone a git repo"))
         )
 
 catFileParser :: Parser CatFileOpts
@@ -102,9 +106,17 @@ commitTreeParser =
                     <> long "author"
                     <> metavar
                         "NAME_AND_EMAIL"
-                    <> help "author name followed by email `Author Name <author@email.eg>`"
+                    <> help
+                        "author name followed by email `Author Name <author@email.eg>`"
                 )
             )
+
+cloneRepoParser :: Parser CloneRepoOpts
+cloneRepoParser =
+    CloneRepoOpts
+        <$> strArgument
+            (metavar "REPO_URL" <> help "Repository URL (only HTTPS is supported)")
+        <*> strArgument (metavar "REPO_LOCAL_PATH" <> help "Local path to clone to")
 
 runCmd :: Command -> IO ()
 runCmd cmd = do
