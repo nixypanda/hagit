@@ -100,8 +100,8 @@ commit1 :: GitObject
 commit1 =
     Commit $
         CommitInner
-            { treeSha = fromRight sha1 $ parseOnly sha1StrParser "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
-            , parentSha = Nothing
+            { treeSha1 = fromRight sha1 $ parseOnly sha1StrParser "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
+            , parentSha1 = Nothing
             , commitMessage = "initial commit"
             , commitAuthor = Contributor "example <example@me.com>" (posixSecondsToUTCTime 0)
             , commitCommitter = Contributor "example <example@me.com>" (posixSecondsToUTCTime 0)
@@ -118,7 +118,7 @@ refDelta1 =
     DeltafiedObj
         { deltaObjHeader = PackObjHeader OBJ_REF_DELTA 16
         , deltaObjData = "\x0b\x10\x90\x05\x0b dumb bitch"
-        , parentSha1 = objSha1 blob1
+        , deltaObjParentSha1 = objSha1 blob1
         }
 
 reconstructedBlobFromBlob1 :: GitObject

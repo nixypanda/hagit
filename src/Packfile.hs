@@ -62,7 +62,7 @@ getUndeltified _ = Nothing
 data DeltafiedObj = DeltafiedObj
     { deltaObjHeader :: PackObjHeader
     , deltaObjData :: BL.ByteString
-    , parentSha1 :: Digest SHA1
+    , deltaObjParentSha1 :: Digest SHA1
     }
     deriving (Show, Eq)
 

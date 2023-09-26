@@ -52,8 +52,8 @@ data GitObject
     deriving (Show, Eq)
 
 data CommitInner = CommitInner
-    { treeSha :: Digest SHA1
-    , parentSha :: Maybe (Digest SHA1)
+    { treeSha1 :: Digest SHA1
+    , parentSha1 :: Maybe (Digest SHA1)
     , commitMessage :: BL.ByteString
     , commitAuthor :: Contributor
     , commitCommitter :: Contributor
@@ -131,7 +131,7 @@ createCommitObject ::
     BL.ByteString ->
     UTCTime ->
     GitObject
-createCommitObject treeSha parentSha authorNameAndEmail commitMessage commitTime = do
+createCommitObject treeSha1 parentSha1 authorNameAndEmail commitMessage commitTime = do
     let commitAuthor = Contributor authorNameAndEmail commitTime
         commitCommitter = commitAuthor
     Commit $ CommitInner{..}
@@ -145,11 +145,11 @@ commitBody commit =
                 c
                 (BLC.unpack contribNameAndEmail)
                 (formatTime defaultTimeLocale "%s %z" contribDate)
-        parent = case parentSha commit of
+        parent = case parentSha1 commit of
             Just sha -> "parent " <> sha1ToHexByteString sha <> "\n"
             Nothing -> ""
      in "tree "
-            <> sha1ToHexByteString (treeSha commit)
+            <> sha1ToHexByteString (treeSha1 commit)
             <> "\n"
             <> parent
             <> BLC.pack (contribStr "author" (commitAuthor commit))

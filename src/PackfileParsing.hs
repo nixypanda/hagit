@@ -379,7 +379,7 @@ reconstructGitObjects ::
     Either String (Map.Map (Digest SHA1) GitObject)
 reconstructGitObjects baseObjects Seq.Empty = pure baseObjects
 reconstructGitObjects baseObjects (deltaObj :<| rest) =
-    case Map.lookup (parentSha1 deltaObj) baseObjects of
+    case Map.lookup (deltaObjParentSha1 deltaObj) baseObjects of
         Nothing -> reconstructGitObjects baseObjects (rest :|> deltaObj)
         Just baseOject -> do
             reconstructedObj <- reconstructDeltaFromBase baseOject deltaObj

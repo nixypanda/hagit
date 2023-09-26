@@ -80,9 +80,9 @@ commitParser = do
 
 commitParser' :: Parser GitObject
 commitParser' = do
-    treeSha <- parseSha1Header "tree"
+    treeSha1 <- parseSha1Header "tree"
     _ <- char '\n'
-    parentSha <- option Nothing (Just <$> parseSha1Header "parent" <* char '\n')
+    parentSha1 <- option Nothing (Just <$> parseSha1Header "parent" <* char '\n')
     commitAuthor <- parseContributor "author"
     _ <- char '\n'
     commitCommitter <- parseContributor "committer"

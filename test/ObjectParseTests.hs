@@ -108,7 +108,7 @@ commitWithoutParentSha1Test =
     let
         treeSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
         -- sha1 will not match with anything, hence it is ok to use it here
-        treeSha1 = fromRight sha1 $ parseOnly sha1StrParser treeSha1Str
+        treeSha = fromRight sha1 $ parseOnly sha1StrParser treeSha1Str
         commitTime = parseTimeOrError True defaultTimeLocale "%s %z" "0 +0000"
 
         input =
@@ -124,8 +124,8 @@ commitWithoutParentSha1Test =
                 ]
         expected =
             CommitInner
-                { treeSha = treeSha1
-                , parentSha = Nothing
+                { treeSha1 = treeSha
+                , parentSha1 = Nothing
                 , commitAuthor = Contributor "example <example@me.com>" commitTime
                 , commitCommitter = Contributor "example <example@me.com>" commitTime
                 , commitMessage = "initial commit"
@@ -143,9 +143,9 @@ commitWithParentSha1Test =
     let
         treeSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
         -- sha1 will not match with anything, hence it is ok to use it here
-        treeSha1 = fromRight sha1 $ parseOnly sha1StrParser treeSha1Str
+        treeSha = fromRight sha1 $ parseOnly sha1StrParser treeSha1Str
         parentSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
-        parentSha1 = fromRight sha1 $ parseOnly sha1StrParser parentSha1Str
+        parentSha = fromRight sha1 $ parseOnly sha1StrParser parentSha1Str
         commitTime = parseTimeOrError True defaultTimeLocale "%s %z" "0 +0000"
 
         input =
@@ -164,8 +164,8 @@ commitWithParentSha1Test =
                 ]
         expected =
             CommitInner
-                { treeSha = treeSha1
-                , parentSha = Just parentSha1
+                { treeSha1 = treeSha
+                , parentSha1 = Just parentSha
                 , commitAuthor = Contributor "example <example@me.com>" commitTime
                 , commitCommitter = Contributor "example <example@me.com>" commitTime
                 , commitMessage = "initial commit"
