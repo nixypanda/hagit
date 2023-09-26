@@ -5,17 +5,16 @@ module PackfileTests (packfileTests) where
 
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
 import Data.ByteString.Lazy qualified as BL
+import Object (GitObject (Blob), objSha1)
 import PackfileParsing (
     DeltaContent (..),
+    DeltafiedObj (..),
     Instruction (..),
-    ObjectType (..),
-    RawDeltifiedObject (..),
-    RawObjectHeader (..),
-    RawUndeltifiedObject (..),
+    PackObjHeader (..),
+    PackObjType (..),
     deltaContentParser,
     deltaHeaderObjSizeParser,
     instructionParser,
-    rawObjSHA1,
     reconstructDeltaFromBase,
  )
 import Test.HUnit
@@ -66,18 +65,17 @@ testDetafiedObjectToInstructions =
 testReconstructDeltaFromBase :: Test
 testReconstructDeltaFromBase =
     let baseObject =
-            RawUndeltifiedObject (RawObjectHeader OBJ_BLOB 23) "hey there I am a badass"
+            Blob "hey there I am a badass"
         deltaObject =
-            RawDeltifiedObject
-                (RawObjectHeader OBJ_REF_DELTA 16)
+            DeltafiedObj
+                (PackObjHeader OBJ_REF_DELTA 16)
                 "\x17\x1f\x90\x14\x0b dumb bitch"
-                (rawObjSHA1 baseObject)
+                (objSha1 baseObject)
      in TestCase $
             assertEqual
                 "reconstruct delta from base"
                 ( Right $
-                    RawUndeltifiedObject
-                        (RawObjectHeader OBJ_BLOB 31)
+                    Blob
                         "hey there I am a bad dumb bitch"
                 )
                 (reconstructDeltaFromBase baseObject deltaObject)

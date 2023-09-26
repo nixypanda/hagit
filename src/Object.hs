@@ -7,7 +7,10 @@ module Object (
     GitObject (..),
     TreeEntry (..),
     ObjectType (..),
+    CommitInner (..),
+    Contributor (..),
     objBody,
+    objBodyLen,
     objCompressedContent,
     objContent,
     objHeader,
@@ -29,7 +32,7 @@ import Data.Time (UTCTime, formatTime)
 import Data.Time.Format (defaultTimeLocale)
 import GHC.Generics (Generic)
 import Text.Printf (printf)
-import Utils (sha1ToByteString)
+import Utils (sha1ToByteString, sha1ToHexByteString)
 
 data ObjectType
     = BlobType
@@ -52,8 +55,14 @@ data CommitInner = CommitInner
     { treeSha :: Digest SHA1
     , parentSha :: Maybe (Digest SHA1)
     , commitMessage :: BL.ByteString
-    , authorInfo :: BL.ByteString
-    , commitTime :: UTCTime
+    , commitAuthor :: Contributor
+    , commitCommitter :: Contributor
+    }
+    deriving (Show, Eq)
+
+data Contributor = Contributor
+    { contribNameAndEmail :: BL.ByteString
+    , contribDate :: UTCTime
     }
     deriving (Show, Eq)
 
@@ -70,8 +79,11 @@ objType (Commit _) = CommitType
 objContent :: GitObject -> BL.ByteString
 objContent obj = objHeader obj <> "\0" <> objBody obj
 
+objBodyLen :: GitObject -> Int
+objBodyLen = fromIntegral . BL.length . objBody
+
 objHeader :: GitObject -> BL.ByteString
-objHeader obj = BLC.pack $ show (objType obj) <> " " <> show (BL.length (objBody obj))
+objHeader obj = BLC.pack $ show (objType obj) <> " " <> show (objBodyLen obj)
 
 objCompressedContent :: GitObject -> BL.ByteString
 objCompressedContent = compress . objContent
@@ -119,22 +131,29 @@ createCommitObject ::
     BL.ByteString ->
     UTCTime ->
     GitObject
-createCommitObject treeSha parentSha authorInfo commitMessage commitTime = do
+createCommitObject treeSha parentSha authorNameAndEmail commitMessage commitTime = do
+    let commitAuthor = Contributor authorNameAndEmail commitTime
+        commitCommitter = commitAuthor
     Commit $ CommitInner{..}
 
 commitBody :: CommitInner -> BL.ByteString
 commitBody commit =
-    let author' = authorInfo commit
+    let contribStr :: String -> Contributor -> String
+        contribStr c Contributor{..} =
+            printf
+                "%s %s %s"
+                c
+                (BLC.unpack contribNameAndEmail)
+                (formatTime defaultTimeLocale "%s %z" contribDate)
         parent = case parentSha commit of
-            Just sha -> "parent " <> sha1ToByteString sha <> "\n"
+            Just sha -> "parent " <> sha1ToHexByteString sha <> "\n"
             Nothing -> ""
      in "tree "
-            <> sha1ToByteString (treeSha commit)
+            <> sha1ToHexByteString (treeSha commit)
             <> "\n"
             <> parent
-            <> "author "
-            <> author'
-            <> " "
-            <> BLC.pack (formatTime defaultTimeLocale "%s" (commitTime commit))
-            <> " +0000\n\n"
+            <> BLC.pack (contribStr "author" (commitAuthor commit))
+            <> "\n"
+            <> BLC.pack (contribStr "committer" (commitCommitter commit))
+            <> "\n"
             <> commitMessage commit

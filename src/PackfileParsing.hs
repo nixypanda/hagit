@@ -7,12 +7,11 @@ module PackfileParsing (
     -- exports for testing
     Instruction (..),
     DeltaContent (..),
-    RawUndeltifiedObject (..),
-    RawDeltifiedObject (..),
-    RawObjectHeader (..),
-    ObjectType (..),
+    DeltafiedObj (..),
+    PackObjHeader (..),
+    PackObjType (..),
+    PackObject (..),
     instructionParser,
-    rawObjSHA1,
     deltaContentParser,
     deltaHeaderObjSizeParser,
     reconstructDeltaFromBase,
@@ -38,6 +37,8 @@ import Data.Maybe (mapMaybe)
 import Data.Sequence (Seq (..))
 import Data.Sequence qualified as Seq
 import Data.Word8 (Word8)
+import Object (GitObject (..), ObjectType (..), objBody, objBodyLen, objSha1, objType)
+import ObjectParse (blobParser', commitParser', gitObjectParser, treeParser')
 import ParsingUtils (sha1Parser)
 import ZlibDecompression (decompressParser)
 import Prelude hiding (take)
@@ -79,7 +80,7 @@ import Prelude hiding (take)
 
 data PackfileWithDeltas = PackfileWithDeltas
     { packfileHeader :: PackfileHeader
-    , packfileObjects :: [RawObject]
+    , packfileObjects :: [PackObject]
     , receivedChecksum :: Digest SHA1
     }
     deriving (Show)
@@ -91,56 +92,49 @@ data PackfileHeader = PackfileHeader
     }
     deriving (Show)
 
-data RawObject
-    = RawUndeltified RawUndeltifiedObject
-    | RawDeltified RawDeltifiedObject
+data PackObject
+    = Undeltafied GitObject
+    | Deltafied DeltafiedObj
     deriving (Show)
 
-getDeltified :: RawObject -> Maybe RawDeltifiedObject
-getDeltified (RawDeltified x) = Just x
+packObjLen :: PackObject -> Int
+packObjLen (Undeltafied go) = objBodyLen go
+packObjLen (Deltafied (DeltafiedObj (PackObjHeader _ size) _ _)) = size
+
+getDeltified :: PackObject -> Maybe DeltafiedObj
+getDeltified (Deltafied x) = Just x
 getDeltified _ = Nothing
 
-getUndeltified :: RawObject -> Maybe RawUndeltifiedObject
-getUndeltified (RawUndeltified x) = Just x
+getUndeltified :: PackObject -> Maybe GitObject
+getUndeltified (Undeltafied x) = Just x
 getUndeltified _ = Nothing
 
-data RawUndeltifiedObject = RawUndeltifiedObject
-    { objHeader :: RawObjectHeader
-    , objData :: BL.ByteString
-    }
-    deriving (Show, Eq)
-
-rawObjSHA1 :: RawUndeltifiedObject -> Digest SHA1
-rawObjSHA1 = hashlazy . objContent
-
-objContent :: RawUndeltifiedObject -> BL.ByteString
-objContent RawUndeltifiedObject{..} = objHeaderRepr objHeader <> "\0" <> objData
-
-data RawDeltifiedObject = RawDeltifiedObject
-    { deltaObjHeader :: RawObjectHeader
+data DeltafiedObj = DeltafiedObj
+    { deltaObjHeader :: PackObjHeader
     , deltaObjData :: BL.ByteString
     , parentSha1 :: Digest SHA1
     }
     deriving (Show)
 
-mkDeltifiedObj :: RawObjectHeader -> Digest SHA1 -> BL.ByteString -> RawObject
+mkDeltifiedObj :: PackObjHeader -> Digest SHA1 -> BL.ByteString -> PackObject
 mkDeltifiedObj objHeader parentSha1 deltaObjData =
-    RawDeltified $ RawDeltifiedObject objHeader deltaObjData parentSha1
+    Deltafied $ DeltafiedObj objHeader deltaObjData parentSha1
 
-mkUndeltifiedObj :: RawObjectHeader -> BL.ByteString -> RawObject
-mkUndeltifiedObj objHeader objData =
-    RawUndeltified $ RawUndeltifiedObject objHeader objData
-
-data RawObjectHeader = RawObjectHeader
-    { objType :: ObjectType
-    , objSize :: Int
+data PackObjHeader = PackObjHeader
+    { packObjType :: PackObjType
+    , packObjSize :: Int
     }
     deriving (Show, Eq)
 
-objHeaderRepr :: RawObjectHeader -> BL.ByteString
-objHeaderRepr RawObjectHeader{..} = BLC.pack $ objTypeRepr objType <> " " <> show objSize
+mkPackObjHeader :: ObjectType -> Int -> PackObjHeader
+mkPackObjHeader BlobType objSize = PackObjHeader OBJ_BLOB objSize
+mkPackObjHeader TreeType objSize = PackObjHeader OBJ_TREE objSize
+mkPackObjHeader CommitType objSize = PackObjHeader OBJ_COMMIT objSize
 
-data ObjectType
+objHeaderRepr :: PackObjHeader -> BL.ByteString
+objHeaderRepr PackObjHeader{..} = BLC.pack $ packObjTypeRepr packObjType <> " " <> show packObjSize
+
+data PackObjType
     = OBJ_COMMIT
     | OBJ_TREE
     | OBJ_BLOB
@@ -149,12 +143,12 @@ data ObjectType
     | OBJ_REF_DELTA
     deriving (Show, Eq)
 
-objTypeRepr :: ObjectType -> String
-objTypeRepr OBJ_COMMIT = "commit"
-objTypeRepr OBJ_TREE = "tree"
-objTypeRepr OBJ_BLOB = "blob"
-objTypeRepr OBJ_TAG = "tag"
-objTypeRepr _ = error "Has no representation"
+packObjTypeRepr :: PackObjType -> String
+packObjTypeRepr OBJ_COMMIT = "commit"
+packObjTypeRepr OBJ_TREE = "tree"
+packObjTypeRepr OBJ_BLOB = "blob"
+packObjTypeRepr OBJ_TAG = "tag"
+packObjTypeRepr _ = error "Has no representation"
 
 -- Packfile Parsing
 
@@ -169,7 +163,7 @@ packfileParser = do
     receivedChecksum <- sha1Parser <* endOfInput
     pure PackfileWithDeltas{..}
 
-parsePackfile :: BL.ByteString -> Either String [RawUndeltifiedObject]
+parsePackfile :: BL.ByteString -> Either String [GitObject]
 parsePackfile input = do
     packfile <- parseOnly packfileParser input
     let inputWithoutChecksum = BL.dropEnd 20 input
@@ -200,29 +194,36 @@ getIntbe = do
 
 -- Undeltified and deltified object
 
-objectParser :: Parser RawObject
+objectParser :: Parser PackObject
 objectParser = do
     rawObjHeader <- objHeaderParser
-    let expectedSize = fromIntegral $ objSize rawObjHeader
-    case objType rawObjHeader of
-        OBJ_OFS_DELTA ->
-            fail $ "Unsupported object type: " <> show OBJ_OFS_DELTA
-        OBJ_REF_DELTA -> do
-            parentSha1 <- sha1Parser
-            decompressedData <- decompressParser
-            let actualSize = BL.length decompressedData
-            when (expectedSize /= actualSize) $
-                fail (objSizeMismatch expectedSize actualSize)
-            pure $ mkDeltifiedObj rawObjHeader parentSha1 decompressedData
-        _ -> do
-            decompressedData <- decompressParser
-            let actualSize = BL.length decompressedData
-            when (expectedSize /= actualSize) $
-                fail (objSizeMismatch expectedSize actualSize)
-            pure $ mkUndeltifiedObj rawObjHeader decompressedData
+    let expectedSize = packObjSize rawObjHeader
+    rawObj <- case packObjType rawObjHeader of
+        OBJ_OFS_DELTA -> fail $ "Unsupported object type: " <> show OBJ_OFS_DELTA
+        OBJ_REF_DELTA -> mkDeltifiedObj rawObjHeader <$> sha1Parser <*> decompressParser
+        OBJ_BLOB -> gitObjParser (Undeltafied <$> blobParser' expectedSize)
+        OBJ_TREE -> gitObjParser (Undeltafied <$> treeParser')
+        OBJ_COMMIT -> gitObjParser (Undeltafied <$> commitParser')
+        OBJ_TAG -> fail $ "Unsupported object type: " <> show OBJ_TAG
+
+    let actualSize = packObjLen rawObj
+    when (expectedSize /= actualSize) $
+        fail (objSizeMismatch expectedSize actualSize)
+
+    pure rawObj
   where
     objSizeMismatch expected actual =
         "Object size mismatch: (Expected: " <> show expected <> ", Actual: " <> show actual <> ")"
+    gitObjParser objParser = do
+        decompressed <- decompressParser
+
+        case parseOnly objParser decompressed of
+            Left err -> fail err
+            Right obj -> pure obj
+
+-- gitObjParser' :: RawObjectHeader -> BL.ByteString -> Parser GitObject
+-- gitObjParser' objHeader objData =
+--     gitObjectParser (objHeaderRepr objHeader <> "\0" <> objData)
 
 -- Type and size encoding
 --
@@ -247,7 +248,7 @@ objectParser = do
 -- last seven bits.  The seven-bit chunks are concatenated. Later
 -- values are more significant.
 
-objHeaderParser :: Parser RawObjectHeader
+objHeaderParser :: Parser PackObjHeader
 objHeaderParser = do
     byte <- fromIntegral <$> anyWord8
     let objectTypeInt = (byte `shiftR` 4) .&. 0x7
@@ -255,11 +256,11 @@ objHeaderParser = do
     let szSoFar = byte .&. 0xf
     case maybeObjectType of
         Nothing -> fail $ "Invalid object type: " <> show objectTypeInt
-        Just objType -> do
-            objSize <- if isMsbSet byte then objSizeParser szSoFar 0 else pure szSoFar
-            pure RawObjectHeader{..}
+        Just packObjType -> do
+            packObjSize <- if isMsbSet byte then objSizeParser szSoFar 0 else pure szSoFar
+            pure PackObjHeader{..}
 
-intToObjectType :: Int -> Maybe ObjectType
+intToObjectType :: Int -> Maybe PackObjType
 intToObjectType 1 = Just OBJ_COMMIT
 intToObjectType 2 = Just OBJ_TREE
 intToObjectType 3 = Just OBJ_BLOB
@@ -418,17 +419,22 @@ convertToInt isPresent val shift i maxI (b : bytes)
 -- Packfile Reconstruction: Applying Instructions to Deltafied Objects
 
 reconstructDeltaFromBase ::
-    RawUndeltifiedObject ->
-    RawDeltifiedObject ->
-    Either String RawUndeltifiedObject
+    GitObject ->
+    DeltafiedObj ->
+    Either String GitObject
 reconstructDeltaFromBase baseObject deltaObject = do
     DeltaContent{..} <- parseOnly deltaContentParser (deltaObjData deltaObject)
     let reconstructedObjContent =
-            foldl (applyInstruction (objData baseObject)) "" instructions
-    pure $
-        RawUndeltifiedObject
-            (RawObjectHeader (objType . objHeader $ baseObject) (fromIntegral $ BL.length reconstructedObjContent))
-            reconstructedObjContent
+            foldl (applyInstruction (objBody baseObject)) "" instructions
+        reconstructedHeader =
+            mkPackObjHeader
+                (objType baseObject)
+                (fromIntegral $ BL.length reconstructedObjContent)
+        reconstructedObjData =
+            objHeaderRepr reconstructedHeader
+                <> "\0"
+                <> reconstructedObjContent
+    parseOnly gitObjectParser reconstructedObjData
 
 applyInstruction :: BL.ByteString -> BL.ByteString -> Instruction -> BL.ByteString
 applyInstruction base obj (Copy offset size) =
@@ -436,23 +442,23 @@ applyInstruction base obj (Copy offset size) =
 applyInstruction _ obj (AddNew dataToAppend) =
     obj <> dataToAppend
 
-reconstructDeltaObjects :: [RawObject] -> Either String [RawUndeltifiedObject]
+reconstructDeltaObjects :: [PackObject] -> Either String [GitObject]
 reconstructDeltaObjects rawObjects =
     Map.elems <$> reconstructGitObjects baseObjectsMap objectsToReconstruct
   where
     baseObjectsMap =
-        Map.fromList $ map (rawObjSHA1 &&& id) $ mapMaybe getUndeltified rawObjects
+        Map.fromList $ map (objSha1 &&& id) $ mapMaybe getUndeltified rawObjects
     objectsToReconstruct = Seq.fromList $ mapMaybe getDeltified rawObjects
 
 reconstructGitObjects ::
-    Map.Map (Digest SHA1) RawUndeltifiedObject ->
-    Seq.Seq RawDeltifiedObject ->
-    Either String (Map.Map (Digest SHA1) RawUndeltifiedObject)
+    Map.Map (Digest SHA1) GitObject ->
+    Seq.Seq DeltafiedObj ->
+    Either String (Map.Map (Digest SHA1) GitObject)
 reconstructGitObjects baseObjects Seq.Empty = pure baseObjects
 reconstructGitObjects baseObjects (deltaObj :<| rest) =
     case Map.lookup (parentSha1 deltaObj) baseObjects of
         Nothing -> reconstructGitObjects baseObjects (rest :|> deltaObj)
         Just baseOject -> do
             reconstructedObj <- reconstructDeltaFromBase baseOject deltaObj
-            let baseObjects' = Map.insert (rawObjSHA1 reconstructedObj) reconstructedObj baseObjects
+            let baseObjects' = Map.insert (objSha1 reconstructedObj) reconstructedObj baseObjects
             reconstructGitObjects baseObjects' rest
