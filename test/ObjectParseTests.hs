@@ -9,10 +9,12 @@ import Crypto.Hash (Digest, SHA1, digestFromByteString)
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
 import Data.ByteString.Char8 qualified as BSC
 import Data.ByteString.Lazy qualified as BL
+import Data.Either (fromRight)
 import Data.Maybe (fromJust)
-import Object (GitObject (..), TreeEntry (..))
+import Data.Time.Format (defaultTimeLocale, parseTimeOrError)
+import Object (CommitInner (..), Contributor (Contributor), GitObject (..), TreeEntry (..))
 import ObjectParse (gitContentToObject, treeEntryParser)
-import ParsingUtils (sha1Parser)
+import ParsingUtils (sha1Parser, sha1StrParser)
 
 sha1String :: String
 sha1String =
@@ -101,11 +103,91 @@ blobParserTest =
                 (gitContentToObject input)
             )
 
+commitWithoutParentSha1Test :: Test
+commitWithoutParentSha1Test =
+    let
+        treeSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
+        -- sha1 will not match with anything, hence it is ok to use it here
+        treeSha1 = fromRight sha1 $ parseOnly sha1StrParser treeSha1Str
+        commitTime = parseTimeOrError True defaultTimeLocale "%s %z" "0 +0000"
+
+        input =
+            BL.concat
+                [ "commit 100\0"
+                , "tree "
+                , treeSha1Str
+                , "\n"
+                , "author example <example@me.com> 0 +0000\n"
+                , "committer example <example@me.com> 0 +0000\n"
+                , "\n"
+                , "initial commit"
+                ]
+        expected =
+            CommitInner
+                { treeSha = treeSha1
+                , parentSha = Nothing
+                , commitAuthor = Contributor "example <example@me.com>" commitTime
+                , commitCommitter = Contributor "example <example@me.com>" commitTime
+                , commitMessage = "initial commit"
+                }
+     in
+        TestCase
+            ( assertEqual
+                "commit without parent SHA1 is parsed into a commit entry properly"
+                (Right $ Commit expected)
+                (gitContentToObject input)
+            )
+
+commitWithParentSha1Test :: Test
+commitWithParentSha1Test =
+    let
+        treeSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
+        -- sha1 will not match with anything, hence it is ok to use it here
+        treeSha1 = fromRight sha1 $ parseOnly sha1StrParser treeSha1Str
+        parentSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
+        parentSha1 = fromRight sha1 $ parseOnly sha1StrParser parentSha1Str
+        commitTime = parseTimeOrError True defaultTimeLocale "%s %z" "0 +0000"
+
+        input =
+            BL.concat
+                [ "commit 100\0"
+                , "tree "
+                , treeSha1Str
+                , "\n"
+                , "parent "
+                , parentSha1Str
+                , "\n"
+                , "author example <example@me.com> 0 +0000\n"
+                , "committer example <example@me.com> 0 +0000\n"
+                , "\n"
+                , "initial commit"
+                ]
+        expected =
+            CommitInner
+                { treeSha = treeSha1
+                , parentSha = Just parentSha1
+                , commitAuthor = Contributor "example <example@me.com>" commitTime
+                , commitCommitter = Contributor "example <example@me.com>" commitTime
+                , commitMessage = "initial commit"
+                }
+     in
+        TestCase
+            ( assertEqual
+                "commit without parent SHA1 is parsed into a commit entry properly"
+                (Right $ Commit expected)
+                (gitContentToObject input)
+            )
+
 treeEntryParserTests :: [Test]
 treeEntryParserTests = [treeEntryParserTestBasic]
 
 gitObjectParsingTests :: [Test]
-gitObjectParsingTests = [blobParserTest, treeParserTest]
+gitObjectParsingTests =
+    [ blobParserTest
+    , treeParserTest
+    , commitWithoutParentSha1Test
+    , commitWithParentSha1Test
+    ]
 
 parserTests :: [Test]
 parserTests = treeEntryParserTests <> gitObjectParsingTests <> [sha1ParserTest]
