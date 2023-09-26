@@ -3,24 +3,44 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module ObjectParse (gitContentToObject, treeEntryParser) where
+module ObjectParse (
+    gitContentToObject,
+    -- Packfile Parsing Requirements
+    commitParser',
+    treeParser',
+    blobParser',
+    -- Testing
+    treeEntryParser,
+    gitObjectParser,
+) where
 
 import Control.Applicative ((<|>))
-import Data.Attoparsec.ByteString.Char8 (char, decimal, digit, space)
+import Data.Attoparsec.ByteString.Char8 (
+    anyChar,
+    char,
+    decimal,
+    digit,
+    signed,
+    skipSpace,
+    space,
+ )
 import Data.Attoparsec.ByteString.Lazy (
     Parser,
     many',
     many1,
+    option,
     parseOnly,
     string,
     take,
     takeWhile,
+    takeWhileIncluding,
  )
 import Data.ByteString.Lazy qualified as BL
 import Data.ByteString.Lazy.Char8 qualified as BLC (pack)
-import Data.Word8 (_nul)
-import Object (GitObject (..), TreeEntry (..))
-import ParsingUtils (ParseError, sha1Parser)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Word8 (_greater, _nul)
+import Object (CommitInner (..), Contributor (..), GitObject (..), TreeEntry (..))
+import ParsingUtils (ParseError, sha1Parser, sha1StrParser)
 import Prelude hiding (take, takeWhile)
 
 gitBlobParser :: Parser GitObject
@@ -28,8 +48,10 @@ gitBlobParser = do
     _ <- string "blob "
     len <- decimal
     _ <- char '\0'
-    content <- take len
-    return (Blob $ BL.fromStrict content)
+    blobParser' len
+
+blobParser' :: Int -> Parser GitObject
+blobParser' n = Blob . BL.fromStrict <$> take n
 
 treeEntryParser :: Parser TreeEntry
 treeEntryParser = do
@@ -38,6 +60,16 @@ treeEntryParser = do
     _ <- char '\0'
     entrySha1 <- sha1Parser
     pure TreeEntry{..}
+
+treeParser :: Parser GitObject
+treeParser = do
+    _ <- string "tree "
+    _ <- many1 digit
+    _ <- char '\0'
+    treeParser'
+
+treeParser' :: Parser GitObject
+treeParser' = Tree <$> many' treeEntryParser
 
 commitParser :: Parser GitObject
 commitParser = do
