@@ -31,6 +31,7 @@ library
       Lib
       Object
       ObjectParse
+      Packfile
       PackfileParsing
       ParsingUtils
       PktLine
@@ -84,7 +85,7 @@ test-suite hagit-test
       HTTPSmartParseTests
       ObjectParseTests
       ObjectTests
-      PackfileTests
+      PackfileParsingTests
       PktLineParseTests
       PktLineTests
       TestingHelpers

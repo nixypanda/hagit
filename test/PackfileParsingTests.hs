@@ -1,7 +1,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module PackfileTests (packfileTests) where
+module PackfileParsingTests (packfileTests) where
 
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
 import Data.ByteString.Lazy qualified as BL
@@ -14,13 +14,15 @@ import Object (
     TreeEntry (..),
     objSha1,
  )
-import PackfileParsing (
+import Packfile (
     DeltaContent (..),
     DeltafiedObj (..),
     Instruction (..),
     PackObjHeader (..),
     PackObjType (..),
-    PackObject (Deltafied, Undeltafied),
+    PackObject (..),
+ )
+import PackfileParsing (
     deltaContentParser,
     deltaHeaderObjSizeParser,
     getIntBe,

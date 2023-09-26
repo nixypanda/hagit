@@ -2,7 +2,7 @@ import HTTPSmartCommandTests (commandTests)
 import HTTPSmartParseTests (smartParserTests)
 import ObjectParseTests (parserTests)
 import ObjectTests (objectTests)
-import PackfileTests (packfileTests)
+import PackfileParsingTests (packfileTests)
 import PktLineParseTests (pktLineParserTests)
 import PktLineTests (pktLineTests)
 import Test.HUnit
