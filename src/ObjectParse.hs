@@ -5,6 +5,7 @@
 
 module ObjectParse (
     gitContentToObject,
+    commitParser,
     -- Packfile Parsing Requirements
     commitParser',
     treeParser',
@@ -20,7 +21,7 @@ import Data.Attoparsec.ByteString.Char8 (
     char,
     decimal,
     digit,
-    signed,
+    manyTill,
     skipSpace,
     space,
  )
@@ -37,7 +38,8 @@ import Data.Attoparsec.ByteString.Lazy (
  )
 import Data.ByteString.Lazy qualified as BL
 import Data.ByteString.Lazy.Char8 qualified as BLC (pack)
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Time (parseTimeM)
+import Data.Time.Format (defaultTimeLocale)
 import Data.Word8 (_greater, _nul)
 import Object (CommitInner (..), Contributor (..), GitObject (..), TreeEntry (..))
 import ParsingUtils (ParseError, sha1Parser, sha1StrParser)
@@ -84,9 +86,7 @@ commitParser' = do
     _ <- char '\n'
     parentSha1 <- option Nothing (Just <$> parseSha1Header "parent" <* char '\n')
     commitAuthor <- parseContributor "author"
-    _ <- char '\n'
     commitCommitter <- parseContributor "committer"
-    _ <- char '\n'
     _ <- char '\n'
     commitMessage <- BLC.pack <$> many' anyChar
     return $ Commit CommitInner{..}
@@ -99,11 +99,12 @@ commitParser' = do
         pure Contributor{..}
 
     parseTimestamp = do
+        let formatStr = "%s %z"
         _ <- skipSpace
-        timestamp <- decimal
-        _ <- skipSpace
-        timeZome <- signed decimal
-        pure $ posixSecondsToUTCTime (fromInteger $ timestamp + timeZome)
+        inputStr <- manyTill anyChar (char '\n')
+        case parseTimeM False defaultTimeLocale formatStr inputStr of
+            Just timestamp -> pure timestamp
+            Nothing -> fail $ "InvalidTimestamp: " <> inputStr
 
 gitObjectParser :: Parser GitObject
 gitObjectParser = treeParser <|> gitBlobParser <|> commitParser

@@ -12,7 +12,7 @@ import Data.ByteString.Lazy qualified as BL
 import Data.Either (fromRight)
 import Data.Maybe (fromJust)
 import Data.Time.Format (defaultTimeLocale, parseTimeOrError)
-import Object (CommitInner (..), Contributor (Contributor), GitObject (..), TreeEntry (..))
+import Object (CommitInner (..), Contributor (Contributor), GitObject (..), TreeEntry (..), objContent)
 import ObjectParse (gitContentToObject, treeEntryParser)
 import ParsingUtils (sha1Parser, sha1StrParser)
 
@@ -178,6 +178,33 @@ commitWithParentSha1Test =
                 (gitContentToObject input)
             )
 
+commitPreservesTimezoneInfo :: Test
+commitPreservesTimezoneInfo =
+    let
+        treeSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
+        parentSha1Str = "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
+        input =
+            BL.concat
+                [ "commit 210\0"
+                , "tree "
+                , treeSha1Str
+                , "\n"
+                , "parent "
+                , parentSha1Str
+                , "\n"
+                , "author example <example@me.com> 1587572148 +0530\n"
+                , "committer example <example@me.com> 1587572148 +0530\n"
+                , "\n"
+                , "initial commit"
+                ]
+     in
+        TestCase
+            ( assertEqual
+                "commit without parent SHA1 is parsed into a commit entry properly"
+                (Right input)
+                (objContent <$> gitContentToObject input)
+            )
+
 treeEntryParserTests :: [Test]
 treeEntryParserTests = [treeEntryParserTestBasic]
 
@@ -187,6 +214,7 @@ gitObjectParsingTests =
     , treeParserTest
     , commitWithoutParentSha1Test
     , commitWithParentSha1Test
+    , commitPreservesTimezoneInfo
     ]
 
 parserTests :: [Test]

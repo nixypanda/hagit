@@ -6,6 +6,7 @@ module PackfileParsingTests (packfileTests) where
 import Data.Attoparsec.ByteString.Lazy (parseOnly)
 import Data.ByteString.Lazy qualified as BL
 import Data.Either (fromRight, isLeft)
+import Data.Time (utc, utcToZonedTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Object (
     CommitInner (..),
@@ -34,7 +35,6 @@ import PackfileParsing (
  )
 import ParsingUtils (sha1StrParser)
 import Test.HUnit
-
 import TestingHelpers (sha1)
 import Utils (sha1ToByteString)
 
@@ -103,9 +103,11 @@ commit1 =
             { treeSha1 = fromRight sha1 $ parseOnly sha1StrParser "33afd6485aadae927bc4bc2986ea9a0d86d5d699"
             , parentSha1 = Nothing
             , commitMessage = "initial commit"
-            , commitAuthor = Contributor "example <example@me.com>" (posixSecondsToUTCTime 0)
-            , commitCommitter = Contributor "example <example@me.com>" (posixSecondsToUTCTime 0)
+            , commitAuthor = contrib
+            , commitCommitter = contrib
             }
+  where
+    contrib = Contributor "example <example@me.com>" (utcToZonedTime utc $ posixSecondsToUTCTime 0)
 
 compressedCommit1 :: BL.ByteString
 compressedCommit1 = "\x90\x09\x78\x9c\x8d\x8b\x4b\x0a\x84\x30\x10\x44\xf7\x39\x45\xef\x07\x86\xe0\x27\x93\x86\x61\x98\xab\x94\xe9\x16\x03\x46\x45\x5a\xf0\xf8\x0a\x7a\x00\x6b\x55\x0f\xde\xb3\x55\x95\xea\x1a\xbd\x84\x26\xb6\x80\x40\xb9\xfa\x74\xa9\xe9\x52\xc5\x31\x28\x18\x5e\x62\x90\x56\x02\xb3\xc3\x66\xc3\xbc\x92\xee\x28\xcb\xa8\xf4\xbd\xcf\xbf\xe8\x3b\xcd\xe5\x47\x9e\x5e\xfe\x9c\x3b\xa1\x64\x33\x7d\xa0\xba\x3c\x65\xcb\x18\xe9\x6a\x0e\xf9\xdf\x2e\x5f"

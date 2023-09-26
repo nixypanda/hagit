@@ -28,7 +28,7 @@ import Codec.Compression.Zlib (compress)
 import Crypto.Hash (Digest, SHA1, hashlazy)
 import Data.ByteString.Lazy qualified as BL
 import Data.ByteString.Lazy.Char8 qualified as BLC
-import Data.Time (UTCTime, formatTime)
+import Data.Time (ZonedTime, formatTime, zonedTimeToUTC)
 import Data.Time.Format (defaultTimeLocale)
 import GHC.Generics (Generic)
 import Text.Printf (printf)
@@ -62,9 +62,14 @@ data CommitInner = CommitInner
 
 data Contributor = Contributor
     { contribNameAndEmail :: BL.ByteString
-    , contribDate :: UTCTime
+    , contribDate :: ZonedTime
     }
-    deriving (Show, Eq)
+    deriving (Show)
+
+instance Eq Contributor where
+    a == b = contribNameAndEmail a == contribNameAndEmail b && utcTime a == utcTime b
+      where
+        utcTime = zonedTimeToUTC . contribDate
 
 objBody :: GitObject -> BL.ByteString
 objBody (Blob b) = b
@@ -129,7 +134,7 @@ createCommitObject ::
     Maybe (Digest SHA1) ->
     BL.ByteString ->
     BL.ByteString ->
-    UTCTime ->
+    ZonedTime ->
     GitObject
 createCommitObject treeSha1 parentSha1 authorNameAndEmail commitMessage commitTime = do
     let commitAuthor = Contributor authorNameAndEmail commitTime
