@@ -156,4 +156,5 @@ commitBody commit =
             <> "\n"
             <> BLC.pack (contribStr "committer" (commitCommitter commit))
             <> "\n"
+            <> "\n"
             <> commitMessage commit

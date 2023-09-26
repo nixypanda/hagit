@@ -87,6 +87,7 @@ test-suite hagit-test
       PackfileTests
       PktLineParseTests
       PktLineTests
+      TestingHelpers
       Paths_hagit
   hs-source-dirs:
       test

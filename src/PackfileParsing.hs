@@ -11,6 +11,10 @@ module PackfileParsing (
     PackObjHeader (..),
     PackObjType (..),
     PackObject (..),
+    PackfileWithDeltas (..),
+    getIntBe,
+    objHeaderParser,
+    objectParser,
     instructionParser,
     deltaContentParser,
     deltaHeaderObjSizeParser,
@@ -95,7 +99,7 @@ data PackfileHeader = PackfileHeader
 data PackObject
     = Undeltafied GitObject
     | Deltafied DeltafiedObj
-    deriving (Show)
+    deriving (Show, Eq)
 
 packObjLen :: PackObject -> Int
 packObjLen (Undeltafied go) = objBodyLen go
@@ -114,7 +118,7 @@ data DeltafiedObj = DeltafiedObj
     , deltaObjData :: BL.ByteString
     , parentSha1 :: Digest SHA1
     }
-    deriving (Show)
+    deriving (Show, Eq)
 
 mkDeltifiedObj :: PackObjHeader -> Digest SHA1 -> BL.ByteString -> PackObject
 mkDeltifiedObj objHeader parentSha1 deltaObjData =
@@ -178,12 +182,12 @@ parsePackfile input = do
 parsePackHeader :: Parser PackfileHeader
 parsePackHeader = do
     magicString <- BL.fromStrict <$> take 4
-    packfileVersion <- getIntbe
-    objectsInPackfile <- getIntbe
+    packfileVersion <- getIntBe
+    objectsInPackfile <- getIntBe
     pure PackfileHeader{..}
 
-getIntbe :: Parser Int
-getIntbe = do
+getIntBe :: Parser Int
+getIntBe = do
     b1 <- fromIntegral <$> anyWord8
     b2 <- fromIntegral <$> anyWord8
     b3 <- fromIntegral <$> anyWord8
