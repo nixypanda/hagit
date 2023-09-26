@@ -10,6 +10,7 @@ module Object (
     CommitInner (..),
     Contributor (..),
     objBody,
+    objBodyLen,
     objCompressedContent,
     objContent,
     objHeader,
@@ -78,8 +79,11 @@ objType (Commit _) = CommitType
 objContent :: GitObject -> BL.ByteString
 objContent obj = objHeader obj <> "\0" <> objBody obj
 
+objBodyLen :: GitObject -> Int
+objBodyLen = fromIntegral . BL.length . objBody
+
 objHeader :: GitObject -> BL.ByteString
-objHeader obj = BLC.pack $ show (objType obj) <> " " <> show (BL.length (objBody obj))
+objHeader obj = BLC.pack $ show (objType obj) <> " " <> show (objBodyLen obj)
 
 objCompressedContent :: GitObject -> BL.ByteString
 objCompressedContent = compress . objContent
