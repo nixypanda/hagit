@@ -158,7 +158,6 @@ objectParser = do
         "Object size mismatch: (Expected: " <> show expected <> ", Actual: " <> show actual <> ")"
     gitObjParser objParser = do
         decompressed <- decompressParser
-
         case parseOnly objParser decompressed of
             Left err -> fail err
             Right obj -> pure obj
@@ -341,22 +340,12 @@ convertToInt isPresent val shift i maxI (b : bytes)
 
 -- Packfile Reconstruction: Applying Instructions to Deltafied Objects
 
-reconstructDeltaFromBase ::
-    GitObject ->
-    DeltafiedObj ->
-    Either String GitObject
+reconstructDeltaFromBase :: GitObject -> DeltafiedObj -> Either String GitObject
 reconstructDeltaFromBase baseObject deltaObject = do
     DeltaContent{..} <- parseOnly deltaContentParser (deltaObjData deltaObject)
-    let reconstructedObjContent =
-            foldl (applyInstruction (objBody baseObject)) "" instructions
-        reconstructedHeader =
-            mkPackObjHeader
-                (objType baseObject)
-                (fromIntegral $ BL.length reconstructedObjContent)
-        reconstructedObjData =
-            objHeaderRepr reconstructedHeader
-                <> "\0"
-                <> reconstructedObjContent
+    let reconstructedObjContent = foldl (applyInstruction (objBody baseObject)) "" instructions
+        reconstructedHeader = mkPackObjHeader (objType baseObject) (fromIntegral $ BL.length reconstructedObjContent)
+        reconstructedObjData = objHeaderRepr reconstructedHeader <> "\0" <> reconstructedObjContent
     parseOnly gitObjectParser reconstructedObjData
 
 applyInstruction :: BL.ByteString -> BL.ByteString -> Instruction -> BL.ByteString
@@ -369,8 +358,7 @@ reconstructDeltaObjects :: [PackObject] -> Either String [GitObject]
 reconstructDeltaObjects rawObjects =
     Map.elems <$> reconstructGitObjects baseObjectsMap objectsToReconstruct
   where
-    baseObjectsMap =
-        Map.fromList $ map (objSha1 &&& id) $ mapMaybe getUndeltified rawObjects
+    baseObjectsMap = Map.fromList $ map (objSha1 &&& id) $ mapMaybe getUndeltified rawObjects
     objectsToReconstruct = Seq.fromList $ mapMaybe getDeltified rawObjects
 
 reconstructGitObjects ::
